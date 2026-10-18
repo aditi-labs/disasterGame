@@ -21,6 +21,7 @@ mask, G toggle projector-safe structure gate.
 from __future__ import annotations
 
 import argparse
+from collections import deque
 from dataclasses import dataclass
 import importlib
 import json
@@ -47,7 +48,7 @@ from .board_aruco import (
     summarize_for_measurement,
 )
 from .camera import CameraWorker, Frame, enumerate_cameras, open_source
-from .candidate_regions import Candidate, CandidateDetector, crop_roi
+from .candidate_regions import Candidate, CandidateDetector, crop_roi, prepare_roi
 from .config import PerceptionConfig, REPO_ROOT
 from .confidence import score
 from .control import ControlServer
@@ -220,6 +221,10 @@ class PerceptionService:
         self._first_valid_ms: int | None = None
         self._reference_requested_manually = False
         self._process_times: list[float] = []
+        self._stage_times: dict[str, deque] = {k: deque(maxlen=120) for k in
+                                               ("aruco", "warp", "candidates", "tracker", "classify", "total")}
+        self._cadence = max(1, cfg.board.redetect_every_n_frames)
+        self._frames_seen = 0
         self._last_status_post = 0.0
         self._approx_intrinsics_set_for: tuple[int, int] | None = None
 
@@ -355,19 +360,32 @@ class PerceptionService:
         self.last_frame = frame
         image = frame.image
         self._ensure_pose_intrinsics(image.shape[1], image.shape[0])
-        reg = self.registrar.update(image, now)
+        self._frames_seen += 1
+        t_stage = time.perf_counter()
+        prev = self.registration_state
+        # ArUco cadence: between detections the last registration is reused (its age keeps
+        # counting); a missing/invalid registration is always re-tried on the next frame.
+        if prev is None or not prev.valid or self._frames_seen % self._cadence == 0:
+            reg = self.registrar.update(image, now)
+        else:
+            reg = prev
+        self._stage_times["aruco"].append(time.perf_counter() - t_stage)
         self.registration_state = reg
         self.last_candidates = []
         warped = None
         reference_ok = self.detector.reference_ready
 
         if reg.valid and reg.homography is not None:
+            t_stage = time.perf_counter()
             warped = warp_board(image, reg.homography, self.geometry)
+            self._stage_times["warp"].append(time.perf_counter() - t_stage)
             self.last_warped = warped
             if self._reference_pending:
                 reference_ok = self._collect_reference(warped, now, reg)
             if reference_ok and not self.paused:
+                t_stage = time.perf_counter()
                 self.last_candidates = self.detector.detect(warped)
+                self._stage_times["candidates"].append(time.perf_counter() - t_stage)
                 if self.detector.changed_fraction > self.cfg.candidates.changed_fraction_warning:
                     self._warn("most of the board differs from the reference (lighting/projector changed?) - press R on an empty board")
                 else:
@@ -380,23 +398,56 @@ class PerceptionService:
         registration_ok = bool(reg.board_in_view and reference_ok and not self.paused)
         if reg.valid and not reg.board_in_view:
             self.last_candidates = []
+        t_stage = time.perf_counter()
         events = self.tracker.update(self.last_candidates, now, frame.frame_id, registration_ok=registration_ok)
         observations = [self._observation_from_event(e, reg, frame) for e in events]
+        self._stage_times["tracker"].append(time.perf_counter() - t_stage)
 
         if registration_ok:
+            t_stage = time.perf_counter()
             observations.extend(self._pending_candidate_observations(reg, frame, now))
             observations.extend(self._apply_classifier_results(reg, frame, now))
             if warped is not None:
                 self._request_classifications(warped, frame, now)
+            self._stage_times["classify"].append(time.perf_counter() - t_stage)
 
         for obs in observations:
             self._emit(obs)
         self._refresh_track_views(reg)
         if self.recorder is not None:
             self.recorder.frame(frame)
-        self._process_times.append(time.perf_counter() - t0)
+        total = time.perf_counter() - t0
+        self._process_times.append(total)
         self._process_times = self._process_times[-60:]
+        self._stage_times["total"].append(total)
+        self._adapt_cadence()
         return observations
+
+    def _adapt_cadence(self) -> None:
+        """Raise the ArUco cadence when the loop falls behind real time, lower it when it recovers."""
+        cfg = self.cfg.board
+        if not cfg.adaptive_cadence or self._frames_seen % 30 != 0 or len(self._process_times) < 30:
+            return
+        budget_s = 1.0 / max(1.0, cfg.target_fps)
+        avg = sum(self._process_times[-30:]) / 30.0
+        base = max(1, cfg.redetect_every_n_frames)
+        if avg > budget_s and self._cadence < max(base, cfg.adaptive_cadence_max):
+            self._cadence += 1
+            self._warn(f"loop at {avg * 1000:.0f} ms/frame: ArUco every {self._cadence} frames")
+        elif avg < 0.6 * budget_s and self._cadence > base:
+            self._cadence -= 1
+            self._unwarn("loop at")
+
+    def timing_summary(self) -> dict[str, dict[str, float | None]]:
+        out: dict[str, dict[str, float | None]] = {}
+        for name, times in self._stage_times.items():
+            vals = sorted(times)
+            if not vals:
+                out[name] = {"p50_ms": None, "p95_ms": None}
+                continue
+            out[name] = {"p50_ms": round(vals[len(vals) // 2] * 1000, 2),
+                         "p95_ms": round(vals[min(len(vals) - 1, int(len(vals) * 0.95))] * 1000, 2)}
+        return out
 
     def _ensure_pose_intrinsics(self, width: int, height: int) -> None:
         mode = self.cfg.service.parallax_correction
@@ -559,11 +610,16 @@ class PerceptionService:
         return out
 
     def _request_classifications(self, warped: np.ndarray, frame: Frame, now: int) -> None:
+        can_accept = getattr(self.classifier, "can_accept", None)
         for track in self.tracker.tracks_needing_classification():
+            if callable(can_accept) and not can_accept():
+                break  # bounded in-flight requests: the track simply asks again on a later frame
             cand = track.last_candidate
             if cand is None:
                 continue
             crop, bbox = crop_roi(warped, cand.bbox_warp_px, pad_px=int(self.geometry.mm_to_px_len(6.0)))
+            crop = prepare_roi(crop, cand.orientation_deg, max_px=self.cfg.service.roi_max_px,
+                               canonical_rotation=self.cfg.service.roi_canonical_rotation)
             uv, _, _, _ = self._track_uv(track, self.registration_state) if self.registration_state else (None, None, None, None)
             request = ROIRequest(
                 request_id=uuid.uuid4().hex[:12], session_id=self.session_id, track_id=track.track_id,
@@ -651,6 +707,8 @@ class PerceptionService:
             "status_sink": self.status_poster.status() if self.status_poster else None,
             "observations_emitted": self.observations_emitted,
             "processing_ms_avg": None if proc_ms is None else round(proc_ms, 1),
+            "timing": self.timing_summary(),
+            "aruco_cadence": self._cadence,
             "warnings": list(self.warnings),
             "structure_gate": self.cfg.candidates.structure_gate,
             "board_mm": [self.registration.board_width_mm, self.registration.board_height_mm],
@@ -674,7 +732,8 @@ class PerceptionService:
         lines = [
             f"FLOODSHIFT perception {__version__} | session {s['session_id']} | {'PAUSED' if self.paused else 'running'}",
             f"camera {'OK' if cam.get('connected') else 'DOWN'} {cam.get('source')} {cam.get('width')}x{cam.get('height')} "
-            f"{cam.get('fps_measured')}fps proc {s['processing_ms_avg']}ms",
+            f"{cam.get('fps_measured')}fps proc {s['processing_ms_avg']}ms p95 {s['timing']['total']['p95_ms']}ms "
+            f"(aruco {s['timing']['aruco']['p50_ms']} cand {s['timing']['candidates']['p50_ms']} every {s['aruco_cadence']}f)",
             f"registration {'VALID' if reg.get('valid') else 'NONE'}{' HELD' if reg.get('held') else ''}"
             f"{' DEGRADED' if reg.get('degraded') else ''} markers {reg.get('markers_used')}/{reg.get('markers_expected')} "
             f"rms {reg.get('reprojection_rms_uv')}uv {reg.get('reprojection_rms_px')}px "
@@ -901,6 +960,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-seconds", type=float, help="stop after N seconds (headless smoke test / timed recording)")
     p.add_argument("--control-port", type=int, help="serve the operator/adapter control API on this port (see perception/control.py)")
     p.add_argument("--control-host", default=None)
+    p.add_argument("--fast", action="store_true",
+                   help="weak-laptop preset: 1.5 px/mm warp, ArUco every 2 frames, no warp window, sparse recording, 256 px ROIs")
     return p
 
 
@@ -942,6 +1003,12 @@ def config_from_args(args: argparse.Namespace) -> PerceptionConfig:
         cfg.service.control_port = args.control_port
     if args.control_host:
         cfg.service.control_host = args.control_host
+    if args.fast:
+        cfg.board.warp_px_per_mm = 1.5
+        cfg.board.redetect_every_n_frames = 2
+        cfg.service.show_warp = False
+        cfg.service.record_every_n_frames = 10
+        cfg.service.roi_max_px = 256
     return cfg
 
 
@@ -973,6 +1040,12 @@ def apply_marker_overrides(registration: BoardRegistration, args: argparse.Names
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Secrets and service settings live in the repo-root .env (spec 3, rule 6); never in code or VITE_* vars.
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(REPO_ROOT / ".env", override=False)
+    except ImportError:  # pragma: no cover - python-dotenv is in requirements
+        pass
     args = build_parser().parse_args(argv)
     cfg = config_from_args(args)
     if args.list_cameras:
@@ -996,7 +1069,10 @@ def main(argv: list[str] | None = None) -> int:
         sinks.append(JsonlSink(cfg.service.jsonl_path))
     if args.stdout:
         sinks.append(StdoutSink())
-    service = PerceptionService(cfg, classifier=load_classifier(args.classifier), sinks=sinks, registration=registration)
+    classifier = load_classifier(args.classifier)
+    if hasattr(classifier, "max_inflight"):
+        classifier.max_inflight = max(1, cfg.service.classifier_max_inflight)
+    service = PerceptionService(cfg, classifier=classifier, sinks=sinks, registration=registration)
     if cfg.service.observe_url:
         def on_response(payload: dict[str, Any], response: Any) -> None:
             if isinstance(response, dict):

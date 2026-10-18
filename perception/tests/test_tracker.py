@@ -16,8 +16,8 @@ def cand(x: float, y: float, *, yellow: float = 0.9) -> Candidate:
                      appearance=Appearance((27.0, 180.0, 200.0), yellow, 1 - yellow), fill_ratio=0.95)
 
 
-CFG = TrackerConfig(stable_frames=5, occlusion_grace_frames=4, lost_candidate_frames=3, move_gate_mm=6.0,
-                    gate_mm=30.0, reacquire_window_ms=2000, reacquire_radius_mm=25.0)
+CFG = TrackerConfig(stable_frames=5, stable_ms=0, occlusion_grace_frames=4, occlusion_grace_ms=0, lost_candidate_frames=3,
+                    move_gate_mm=6.0, gate_mm=30.0, reacquire_window_ms=2000, reacquire_radius_mm=25.0)
 
 
 def run(tracker: PieceTracker, frames: list[list[Candidate] | None], start_frame: int = 1, dt_ms: int = 33, t0: int = 0,
@@ -195,3 +195,35 @@ def test_operator_reemit_for_a_still_track():
     tr.bind_world_token("t1", "tok")
     again2 = tr.request_reemit("t1", t + 20, 100)
     assert again2.lifecycle is Lifecycle.MOVED
+
+
+# ---------------------------------------------------------------- lag / accuracy ideas
+def test_time_based_stability_confirms_as_fast_on_a_slow_laptop_as_on_a_fast_one():
+    cfg = TrackerConfig(stable_frames=4, stable_ms=350, occlusion_grace_ms=0)
+    fast = PieceTracker(cfg)
+    ev_fast, _ = run(fast, [[cand(100, 100)]] * 30, dt_ms=33)      # 30 fps
+    slow = PieceTracker(cfg)
+    ev_slow, _ = run(slow, [[cand(100, 100)]] * 30, dt_ms=100)     # 10 fps
+    t_fast = next(e.at_ms for e in ev_fast if e.lifecycle is Lifecycle.PLACED)
+    t_slow = next(e.at_ms for e in ev_slow if e.lifecycle is Lifecycle.PLACED)
+    assert 350 <= t_fast <= 450 and 350 <= t_slow <= 500   # both confirm ~0.4 s after placement
+    assert t_slow - t_fast < 150
+
+
+def test_occlusion_grace_is_at_least_a_duration_not_just_a_frame_count():
+    cfg = TrackerConfig(stable_frames=3, stable_ms=0, occlusion_grace_frames=2, occlusion_grace_ms=600)
+    tr = PieceTracker(cfg)
+    ev, t = run(tr, [[cand(100, 100)]] * 5, dt_ms=33)
+    ev2, t = run(tr, [None] * 10, start_frame=6, t0=t, dt_ms=33)   # 330 ms absent: still within 600 ms
+    assert ev2 == [] and "t1" in tr.tracks
+    ev3, _ = run(tr, [None] * 10, start_frame=16, t0=t, dt_ms=33)  # now 660 ms absent
+    assert lifecycles(ev3) == [Lifecycle.REMOVED]
+
+
+def test_median_position_filter_ignores_a_single_jittery_frame():
+    tr = PieceTracker(TrackerConfig(stable_frames=3, stable_ms=0, position_filter="median", jitter_window=5))
+    run(tr, [[cand(100, 100)]] * 4 + [[cand(104, 100)]] + [[cand(100, 100)]] * 2)
+    assert abs(tr.tracks["t1"].center_mm[0] - 100.0) < 0.01
+    tr_mean = PieceTracker(TrackerConfig(stable_frames=3, stable_ms=0, position_filter="mean", jitter_window=5))
+    run(tr_mean, [[cand(100, 100)]] * 4 + [[cand(104, 100)]] + [[cand(100, 100)]] * 2)
+    assert tr_mean.tracks["t1"].center_mm[0] > 100.5

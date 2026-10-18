@@ -185,3 +185,82 @@ def test_droidcam_helpers():
     assert droidcam_url("10.0.0.5", 4848) == "http://10.0.0.5:4848/video"
     cams = list_cameras(max_index=0)
     assert cams == []
+
+
+# ---------------------------------------------------------------- lag / accuracy ideas
+def test_port_bounds_inflight_requests_and_reports_latency():
+    held = []
+
+    class SlowDev2:
+        _adapter = type("A", (), {"is_available": True, "get_telemetry": lambda self: {}})()
+
+        def classify_async(self, track_id, roi_image, callback=None):
+            held.append((track_id, callback))  # answer later
+
+    port = PerceptronClassifierPort(SlowDev2(), max_inflight=2)
+    port.submit(_roi("t1", "r1")); port.submit(_roi("t2", "r2"))
+    assert not port.can_accept()
+    port.submit(_roi("t3", "r3"))
+    deferred = port.poll()
+    assert len(deferred) == 1 and deferred[0].track_id == "t3" and not deferred[0].valid and deferred[0].class_source == "deferred"
+    for tid, cb in held:
+        cb(tid, ClassificationResult(tid, PieceClass.BRIDGE, "perceptron", 0.9, True))
+    results = port.poll()
+    assert sorted(r.track_id for r in results) == ["t1", "t2"] and port.can_accept()
+    st = port.status()
+    assert st["deferred_busy"] == 1 and st["latency_ms_p50"] is not None and st["inflight"] == 0
+
+
+def test_prepare_roi_rotates_long_axis_horizontal_and_downscales():
+    from perception.candidate_regions import prepare_roi
+    import cv2
+    canvas = np.zeros((400, 400, 3), np.uint8)
+    box = cv2.boxPoints(((200, 200), (300, 100), 40.0))
+    cv2.fillConvexPoly(canvas, box.astype(np.int32), (40, 220, 240))
+    out = prepare_roi(canvas, 40.0, max_px=200, canonical_rotation=True)
+    assert max(out.shape[:2]) == 200
+    ys, xs = np.where(out[..., 2] > 200)
+    assert (xs.max() - xs.min()) > 2.2 * (ys.max() - ys.min())   # long axis now horizontal
+    same = prepare_roi(canvas, 40.0, max_px=0, canonical_rotation=False)
+    assert same.shape == canvas.shape
+
+
+def test_aruco_cadence_reuses_registration_between_detections_and_status_reports_timings(tmp_path):
+    board = SyntheticBoard()
+    reg = make_registration(tmp_path)
+    cam = lambda img: render_camera(img, camera_homography(board.geometry))  # noqa: E731
+    cfg = fast_config(tmp_path, reg)
+    cfg.board.redetect_every_n_frames = 3
+    cfg.board.adaptive_cadence = False
+    svc = PerceptionService(cfg, classifier=NullClassifier(), sinks=[])
+    obs, t = feed(svc, [cam(board.empty)] * 6)
+    detections_before = svc.registrar.last_state
+    obs, t = feed(svc, [cam(board.with_pieces([BRIDGE]))] * 9, start_frame=7, t0=t)
+    assert by_lifecycle(obs, Lifecycle.PLACED)
+    st = svc.status()
+    assert st["aruco_cadence"] == 3
+    timing = st["timing"]
+    assert timing["total"]["p95_ms"] is not None and timing["candidates"]["p50_ms"] is not None
+    # two of every three frames skip ArUco, so its median cost is near zero
+    assert timing["aruco"]["p50_ms"] < timing["total"]["p50_ms"]
+    svc.stop()
+
+
+def test_adaptive_cadence_backs_off_when_the_loop_is_slow(tmp_path):
+    board = SyntheticBoard()
+    reg = make_registration(tmp_path)
+    cam = lambda img: render_camera(img, camera_homography(board.geometry))  # noqa: E731
+    cfg = fast_config(tmp_path, reg)
+    cfg.board.target_fps = 10000.0  # an impossible budget: every frame is "too slow"
+    svc = PerceptionService(cfg, classifier=NullClassifier(), sinks=[])
+    feed(svc, [cam(board.empty)] * 65)
+    assert svc.status()["aruco_cadence"] == 3  # bumped twice (frames 30 and 60), capped at the max
+    assert any("ArUco every" in w for w in svc.warnings)
+    svc.stop()
+
+
+def test_fast_preset_sets_the_weak_laptop_knobs():
+    from perception.service import build_parser, config_from_args
+    cfg = config_from_args(build_parser().parse_args(["--fast"]))
+    assert cfg.board.warp_px_per_mm == 1.5 and cfg.board.redetect_every_n_frames == 2
+    assert cfg.service.show_warp is False and cfg.service.roi_max_px == 256

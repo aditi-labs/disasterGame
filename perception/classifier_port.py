@@ -24,6 +24,7 @@ Use::
 from __future__ import annotations
 
 import threading
+import time
 from typing import Any
 
 from .events import ClassificationResult, ROIRequest
@@ -32,28 +33,50 @@ MODEL_SOURCES = {"perceptron"}
 
 
 class PerceptronClassifierPort:
-    def __init__(self, classifier=None, *, trust_non_model_confidence: bool = False):
+    def __init__(self, classifier=None, *, trust_non_model_confidence: bool = False, max_inflight: int = 2):
         if classifier is None:
             from .classifier import get_classifier  # Dev 2 module; imported lazily
             classifier = get_classifier()
         self.classifier = classifier
         self.trust_non_model_confidence = trust_non_model_confidence
+        self.max_inflight = max(1, int(max_inflight))
         self._lock = threading.Lock()
         self._results: list[ClassificationResult] = []
-        self._pending: dict[str, str] = {}  # track_id -> request_id of the latest request
+        self._pending: dict[str, tuple[str, float]] = {}  # track_id -> (request_id, submitted_at)
         self.submitted = 0
         self.received = 0
+        self.deferred = 0
         self.downgraded_fallback = 0
+        self._latencies_ms: list[float] = []
+
+    @property
+    def inflight(self) -> int:
+        with self._lock:
+            return len(self._pending)
+
+    def can_accept(self) -> bool:
+        """The service asks before building a crop; keeps the model queue bounded (spec 7.7)."""
+        return self.inflight < self.max_inflight
 
     # -- ClassifierPort
     def submit(self, request: ROIRequest) -> None:
+        if not self.can_accept():
+            # The tracker will ask again on a later frame; nothing is lost, nothing queues up.
+            self.deferred += 1
+            with self._lock:
+                self._results.append(ClassificationResult(request.track_id, None, "deferred", None, False,
+                                                          evidence="classifier busy", request_id=request.request_id))
+            return
         self.submitted += 1
+        submitted_at = time.monotonic()
         with self._lock:
-            self._pending[request.track_id] = request.request_id
+            self._pending[request.track_id] = (request.request_id, submitted_at)
 
         def on_result(track_id: str, result: ClassificationResult) -> None:
             with self._lock:
-                request_id = self._pending.pop(track_id, request.request_id)
+                request_id, started = self._pending.pop(track_id, (request.request_id, submitted_at))
+                self._latencies_ms.append((time.monotonic() - started) * 1000.0)
+                self._latencies_ms = self._latencies_ms[-200:]
                 self._results.append(self._normalise(result, request_id))
                 self.received += 1
 
@@ -65,8 +88,13 @@ class PerceptronClassifierPort:
         return out
 
     def status(self) -> dict[str, Any]:
+        with self._lock:
+            lat = sorted(self._latencies_ms)
         info: dict[str, Any] = {"kind": "perceptron_port", "submitted": self.submitted, "received": self.received,
-                                "fallback_results_downgraded": self.downgraded_fallback}
+                                "deferred_busy": self.deferred, "inflight": self.inflight, "max_inflight": self.max_inflight,
+                                "fallback_results_downgraded": self.downgraded_fallback,
+                                "latency_ms_p50": round(lat[len(lat) // 2], 1) if lat else None,
+                                "latency_ms_p95": round(lat[min(len(lat) - 1, int(len(lat) * 0.95))], 1) if lat else None}
         adapter = getattr(self.classifier, "_adapter", None)
         available = bool(getattr(adapter, "is_available", False))
         info["available"] = available

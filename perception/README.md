@@ -126,6 +126,25 @@ age, reconnects), registration (valid/held/degraded, markers used vs expected, R
 px, `registration_verified`), reference state and changed fraction, tracks, classifier
 status, sink counters, processing time, warnings.
 
+## Latency and accuracy knobs (added after the first friend's-laptop run)
+
+- **Time-based stability.** A track confirms after `tracker.stable_ms` (350 ms) of stillness and
+  at least `stable_frames` (4) frames, so a 10 fps laptop confirms as fast as a 30 fps one.
+  Occlusion grace is likewise `occlusion_grace_ms` (700 ms) *and* `occlusion_grace_frames`.
+- **Median position filter.** `tracker.position_filter = "median"` makes the emitted centre
+  immune to a single jittery frame.
+- **ArUco cadence.** `board.redetect_every_n_frames` reuses the last registration between
+  detections; with `adaptive_cadence` the service raises it (up to 3) when the loop falls
+  behind `target_fps` and lowers it again when it recovers. The operator line shows `every Nf`.
+- **Classifier crops.** ROIs are rotated so the piece's long axis is horizontal and downscaled
+  to `service.roi_max_px` (320) before Perceptron sees them: faster upload, consistent view.
+  `classifier_max_inflight` (2) bounds outstanding model calls; extra tracks simply ask again.
+- **Timing telemetry.** Status carries `timing` with p50/p95 per stage (aruco, warp,
+  candidates, tracker, classify, total) and the port reports classifier latency p50/p95.
+  Tune from these numbers on a `--record` replay, not from feel.
+- **`--fast` preset** for weak laptops: 1.5 px/mm warp, ArUco every 2 frames, warp window off,
+  sparse recording, 256 px ROIs.
+
 ## Tuning
 
 Starting thresholds live in `perception/config.py`. Spec 5 requires tuning against recorded

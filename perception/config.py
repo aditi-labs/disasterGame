@@ -48,7 +48,10 @@ class BoardConfig:
     jump_tolerance_uv: float = 0.02          # a re-solve moving the board corners more than this
                                              # while markers are missing is treated as occlusion noise
     marker_exclusion_margin_mm: float = 6.0  # dilation around marker quads in the candidate mask
-    redetect_every_n_frames: int = 1         # ArUco runs every frame by default (cheap at 720p)
+    redetect_every_n_frames: int = 1         # ArUco cadence; 1 = every frame
+    adaptive_cadence: bool = True            # raise the cadence (up to max) when the loop falls behind real time
+    adaptive_cadence_max: int = 3
+    target_fps: float = 25.0                 # the loop tries to stay at/under 1000/target_fps ms per frame
     use_ransac_from_points: int = 8          # findHomography RANSAC when >= this many points
     ransac_reproj_threshold_px: float = 3.0
 
@@ -77,9 +80,14 @@ class CandidateConfig:
 class TrackerConfig:
     gate_mm: float = 30.0            # association gate in board mm (nearest neighbour)
     move_gate_mm: float = 6.0        # centre drift below this counts as "still"
-    stable_frames: int = 12          # consecutive still frames before PLACED/MOVED is emitted
+    # Stability is TIME based so a slow laptop does not wait longer than a fast one:
+    # a track emits once it has been still for stable_ms AND at least stable_frames frames.
+    stable_ms: int = 350
+    stable_frames: int = 4           # floor on consecutive still frames (noise guard at high fps)
     occlusion_grace_frames: int = 20 # frames a track may be unmatched before REMOVED (~0.7 s at 30 fps)
+    occlusion_grace_ms: int = 700    # ...and at least this long (whichever is later)
     lost_candidate_frames: int = 8   # an unstable candidate vanishing this long is LOST (no world event)
+    position_filter: str = "median"  # "median" (robust to one jittery frame) | "mean"
     reacquire_window_ms: int = 4000  # a new track appearing near a just-removed one carries previous_track_id
     reacquire_radius_mm: float = 25.0
     jitter_window: int = 10          # frames used for position jitter / smoothing
@@ -125,6 +133,9 @@ class ServiceConfig:
     max_seconds: float | None = None           # headless runs / smoke tests: stop after this long
     control_port: int | None = None            # operator/adapter control API (perception/control.py); None = off
     control_host: str = "127.0.0.1"
+    roi_max_px: int = 320                      # classifier crops are downscaled to this longest side
+    roi_canonical_rotation: bool = True        # rotate crops so the piece's long axis is horizontal
+    classifier_max_inflight: int = 2           # outstanding classification requests at once
     piece_height_mm: dict = field(default_factory=lambda: {
         "bridge": 13.0, "hospital": 22.0, "shelter": 22.0, "food_station": 22.0, "unknown": 17.0})
     live_captures_dir: str = "assets/live_captures"

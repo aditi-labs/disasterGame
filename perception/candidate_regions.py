@@ -273,6 +273,37 @@ def _appearance(hsv: np.ndarray, mask: np.ndarray, bbox: tuple[int, int, int, in
     return Appearance((float(hch.mean()), float(sch.mean()), float(vch.mean())), float(yellow), float(white))
 
 
+def prepare_roi(crop_bgr: np.ndarray, orientation_deg: float | None, *, max_px: int = 320,
+                canonical_rotation: bool = True) -> np.ndarray:
+    """Make a classifier crop small and consistent (lag + accuracy).
+
+    * ``canonical_rotation``: rotate so the piece's long axis is horizontal.  Perceptron then
+      sees every bridge the same way the top-view reference photos show it, instead of at an
+      arbitrary angle on the board.  The canvas is expanded so nothing is cut off.
+    * ``max_px``: downscale the longest side; a 320 px crop uploads and infers far faster than
+      a full-resolution one with no useful detail lost at this scale.
+    """
+    out = crop_bgr
+    if canonical_rotation and orientation_deg is not None and out.size:
+        h, w = out.shape[:2]
+        angle = float(orientation_deg) % 180.0
+        if angle > 90.0:
+            angle -= 180.0  # rotate the short way
+        if abs(angle) > 2.0:
+            m = cv2.getRotationMatrix2D((w / 2.0, h / 2.0), angle, 1.0)
+            cos, sin = abs(m[0, 0]), abs(m[0, 1])
+            new_w, new_h = int(h * sin + w * cos), int(h * cos + w * sin)
+            m[0, 2] += new_w / 2.0 - w / 2.0
+            m[1, 2] += new_h / 2.0 - h / 2.0
+            out = cv2.warpAffine(out, m, (new_w, new_h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+    if max_px and out.size:
+        longest = max(out.shape[:2])
+        if longest > max_px:
+            scale = max_px / float(longest)
+            out = cv2.resize(out, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    return out
+
+
 def crop_roi(warped_bgr: np.ndarray, bbox_warp_px: tuple[int, int, int, int], pad_px: int = 12) -> tuple[np.ndarray, tuple[int, int, int, int]]:
     """Perspective-corrected crop for the classifier, with padding clamped to the board."""
     x, y, w, h = bbox_warp_px

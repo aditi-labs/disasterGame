@@ -26,7 +26,9 @@ def fast_config(tmp_path, registration) -> PerceptionConfig:
     cfg.board.registration_path = str(registration.path)
     cfg.candidates.reference_frames = 3
     cfg.tracker.stable_frames = 4
+    cfg.tracker.stable_ms = 0
     cfg.tracker.occlusion_grace_frames = 3
+    cfg.tracker.occlusion_grace_ms = 0
     cfg.tracker.lost_candidate_frames = 2
     cfg.service.debug_window = False
     cfg.service.reference_settle_ms = 0

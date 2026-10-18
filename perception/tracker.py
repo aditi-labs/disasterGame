@@ -66,6 +66,8 @@ class Track:
     raw_center_mm: tuple[float, float] = (0.0, 0.0)
     history_mm: Deque[tuple[float, float]] = field(default_factory=lambda: deque(maxlen=10))
     anchor_mm: tuple[float, float] | None = None        # position when the current still-streak began
+    still_since_ms: int | None = None                   # when the current still-streak began
+    missing_since_ms: int | None = None                 # when the track was last matched before going missing
     last_candidate: Candidate | None = None
     frames_observed: int = 0
     frames_stable: int = 0
@@ -286,6 +288,7 @@ class PieceTracker:
         track.raw_center_mm = cand.center_mm
         track.history_mm = deque([cand.center_mm], maxlen=self.cfg.jitter_window)
         track.anchor_mm = cand.center_mm
+        track.still_since_ms = now_ms
         track.last_candidate = cand
         track.frames_observed = 1
         track.frames_stable = 0
@@ -321,18 +324,20 @@ class PieceTracker:
         track.last_frame_id = frame_id
         track.raw_center_mm = cand.center_mm
         track.history_mm.append(cand.center_mm)
-        n = len(track.history_mm)
-        track.center_mm = (sum(p[0] for p in track.history_mm) / n, sum(p[1] for p in track.history_mm) / n)
+        track.center_mm = self._filtered_center(track)
+        track.missing_since_ms = None
         previous_candidate = track.last_candidate
         track.last_candidate = cand
 
         if track.anchor_mm is None:
             track.anchor_mm = cand.center_mm
+            track.still_since_ms = now_ms
         drift = _dist(cand.center_mm, track.anchor_mm)
         if drift <= self.cfg.move_gate_mm:
             track.frames_stable += 1
         else:
             track.anchor_mm = cand.center_mm
+            track.still_since_ms = now_ms
             track.frames_stable = 0
             track.history_mm.clear()
             track.history_mm.append(cand.center_mm)
@@ -348,7 +353,7 @@ class PieceTracker:
             track.needs_classification = True
             track.classification_reason = "appearance_changed"
 
-        if track.frames_stable >= self.cfg.stable_frames:
+        if self._is_stable(track, now_ms):
             if not track.emitted:
                 events.append(self._emit(track, Lifecycle.PLACED, now_ms, frame_id,
                                          "re-placed after rejection" if track.rejected_reason else "placed"))
@@ -378,10 +383,13 @@ class PieceTracker:
     def _age(self, track: Track, now_ms: int, frame_id: int) -> list[TrackEvent]:
         events: list[TrackEvent] = []
         track.frames_missing += 1
+        if track.missing_since_ms is None:
+            track.missing_since_ms = track.last_seen_ms
         if track.emitted:
             if track.state != TrackState.MISSING:
                 track.state = TrackState.MISSING
-            if track.frames_missing > self.cfg.occlusion_grace_frames:
+            grace_elapsed = now_ms - track.missing_since_ms >= self.cfg.occlusion_grace_ms
+            if track.frames_missing > self.cfg.occlusion_grace_frames and grace_elapsed:
                 track.emissions += 1
                 track.last_emitted_lifecycle = Lifecycle.REMOVED
                 events.append(TrackEvent(track, Lifecycle.REMOVED, track.emissions, frame_id, now_ms,
@@ -394,6 +402,27 @@ class PieceTracker:
                                          track.center_mm, track.last_candidate, "candidate vanished before stable"))
                 self._retire(track, now_ms, remember=False)
         return events
+
+    def _is_stable(self, track: Track, now_ms: int) -> bool:
+        if track.frames_stable < self.cfg.stable_frames:
+            return False
+        if self.cfg.stable_ms <= 0 or track.still_since_ms is None:
+            return True
+        return now_ms - track.still_since_ms >= self.cfg.stable_ms
+
+    def _filtered_center(self, track: Track) -> tuple[float, float]:
+        pts = list(track.history_mm)
+        if not pts:
+            return track.center_mm
+        if self.cfg.position_filter == "median" and len(pts) >= 3:
+            xs = sorted(p[0] for p in pts)
+            ys = sorted(p[1] for p in pts)
+            mid = len(pts) // 2
+            if len(pts) % 2:
+                return (xs[mid], ys[mid])
+            return ((xs[mid - 1] + xs[mid]) / 2.0, (ys[mid - 1] + ys[mid]) / 2.0)
+        n = len(pts)
+        return (sum(p[0] for p in pts) / n, sum(p[1] for p in pts) / n)
 
     def _retire(self, track: Track, now_ms: int, remember: bool = True) -> None:
         track.state = TrackState.RETIRED
