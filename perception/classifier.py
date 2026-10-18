@@ -577,3 +577,69 @@ def init_classifier(config: ClassifierConfig) -> PieceClassifier:
     global _classifier_instance
     _classifier_instance = PieceClassifier(config)
     return _classifier_instance
+
+
+# =============================================================================
+# ClassifierPort adapter for perception service integration
+# =============================================================================
+
+class PerceptronClassifierPort:
+    """
+    Adapter that implements ClassifierPort protocol for the perception service.
+
+    Wraps PieceClassifier to provide the submit/poll interface expected by
+    perception.service.PerceptionService.
+    """
+
+    def __init__(self):
+        from dotenv import load_dotenv
+        load_dotenv()
+
+        self._classifier = get_classifier()
+        self._pending_results: list[ClassificationResult] = []
+        self._submitted = 0
+        self._classified = 0
+
+    def submit(self, request) -> None:
+        """Submit an ROI for classification. Non-blocking."""
+        self._submitted += 1
+
+        # Extract image from request
+        crop_bgr = request.crop_bgr
+        track_id = request.track_id
+
+        # Run classification (sync for now, could be made async)
+        result = self._classifier.classify_sync(track_id, crop_bgr)
+
+        if result.valid:
+            self._classified += 1
+            self._pending_results.append(result)
+
+    def poll(self) -> list:
+        """Return pending classification results."""
+        results = self._pending_results
+        self._pending_results = []
+        return results
+
+    def status(self) -> dict:
+        """Return classifier status for operator display."""
+        return {
+            "kind": "perceptron",
+            "available": self._classifier._adapter.is_available,
+            "submitted": self._submitted,
+            "classified": self._classified,
+            "perceptron_status": self._classifier._adapter.status.value,
+        }
+
+    def close(self) -> None:
+        """Cleanup resources."""
+        self._classifier.shutdown()
+
+
+def create_classifier():
+    """Factory function for perception service integration.
+
+    Usage:
+        python -m perception.service --classifier perception.classifier:create_classifier
+    """
+    return PerceptronClassifierPort()
