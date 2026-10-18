@@ -51,3 +51,15 @@ it("reconciles stale actions once using the same action id and latest backend ve
   expect(world.snapshot!.world_version).toBe(4);
   expect(world.knownVersion()).toBe(5); // Results keep syncing until the acknowledged version arrives.
 });
+it("receives physical feedback separately and clears it on authoritative reset", () => {
+  act(() => { hello(); snapshot(3); });
+  act(() => receive({ type: "vision.status", seq: 20, payload: { observations: [], physical_feedback: {
+    event_id: "test-observation", track_id: "test-track", status: "pending", board_uv: [.3,.4], accepted: false,
+  } } }));
+  expect(world.physicalFeedback).toHaveLength(1);
+  expect(world.snapshot!.world_version).toBe(3);
+  act(() => receive({ type: "world.snapshot", seq: 21, payload: fixture.states.ready }));
+  // Lower-version snapshots on the same branch are discarded; a server reset advances its version.
+  act(() => receive({ type: "world.snapshot", seq: 22, payload: { ...fixture.states.ready, world_version: 4 } }));
+  expect(world.physicalFeedback).toEqual([]);
+});

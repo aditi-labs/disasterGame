@@ -1,32 +1,34 @@
 {
   "kind": "floodshift.ui.live-test",
-  "verified_at": "2026-10-18T11:51:24.395Z",
+  "verified_at": "2026-10-18T13:14:35.898Z",
   "scenario_id": "nepal_rasuwa_hot_v1",
-  "execution": "React test renderer + real HTTP/WebSocket/BroadcastChannel + real monotonic 75-second clock",
+  "execution": "React test renderer + real HTTP/WebSocket/BroadcastChannel + real monotonic 75-second clock; controlled PhysicalObservation inputs and test calibration, not live detections",
   "browser_visual_check": "NOT RUN: no browser session available",
   "physical_board_check": "NOT RUN",
   "assertions": [
     "both routes mounted",
+    "START-only laptop view",
+    "operator tools preserve clock",
     "digital START and two population records",
-    "pause/resume",
-    "manual bridge place/move/remove/retry",
-    "duplicate placement rejected",
+    "pause/resume acknowledges backend input gate",
+    "controlled physical pending/place/move/remove reaches projector",
+    "manual correction and duplicate rejection",
     "three facilities accepted",
-    "exactly one timed surge rejected last_stage",
-    "input closed at 70s",
+    "one timed surge rejected last_stage",
+    "backend physical input closed and final state captured at 70s",
     "finished at 75s",
     "backend-derived results",
-    "replay clears world"
+    "replay clears world and epoch"
   ],
   "frames": [
     {
       "label": "digital_start_with_both_population_records",
-      "at": "2026-10-18T11:50:08.710Z",
+      "at": "2026-10-18T13:13:20.279Z",
       "elapsed_ms": 0,
       "phase": "WARNING",
       "projector_phase": "WARNING",
       "world_version": 4,
-      "projector_world_version": 3,
+      "projector_world_version": 4,
       "simulation_stage": 1,
       "surge": "not_due",
       "syncing": false,
@@ -64,8 +66,8 @@
     },
     {
       "label": "crossing_10s",
-      "at": "2026-10-18T11:50:19.195Z",
-      "elapsed_ms": 10007.3285,
+      "at": "2026-10-18T13:13:30.763Z",
+      "elapsed_ms": 10067.0603,
       "phase": "CROSSING",
       "projector_phase": "CROSSING",
       "world_version": 4,
@@ -106,9 +108,9 @@
       "blocked_roads": 3
     },
     {
-      "label": "bridge_accepted",
-      "at": "2026-10-18T11:50:19.307Z",
-      "elapsed_ms": 10112.304,
+      "label": "controlled_physical_bridge_accepted",
+      "at": "2026-10-18T13:13:30.916Z",
+      "elapsed_ms": 10180.4386,
       "phase": "CROSSING",
       "projector_phase": "CROSSING",
       "world_version": 5,
@@ -132,7 +134,55 @@
         {
           "type": "bridge",
           "site": "crossing_east",
+          "source": "replay"
+        },
+        {
+          "type": "person",
+          "site": "people_east",
           "source": "manual"
+        },
+        {
+          "type": "person",
+          "site": "people_west",
+          "source": "manual"
+        },
+        {
+          "type": "disaster_start",
+          "site": "start_pad",
+          "source": "manual"
+        }
+      ],
+      "open_routes": 0,
+      "blocked_roads": 2
+    },
+    {
+      "label": "controlled_physical_bridge_moved",
+      "at": "2026-10-18T13:13:31.045Z",
+      "elapsed_ms": 10287.2734,
+      "phase": "CROSSING",
+      "projector_phase": "CROSSING",
+      "world_version": 6,
+      "projector_world_version": 6,
+      "simulation_stage": 1,
+      "surge": "not_due",
+      "syncing": false,
+      "metrics": {
+        "people_reachable_for_medical": 0,
+        "people_reachable_for_food": 0,
+        "people_reachable_for_shelter": 0,
+        "unmet_food_model": 16,
+        "unmet_medical_model": 4,
+        "unmet_refuge_model": 16,
+        "blocked_roads": 2,
+        "resource_spent": 2,
+        "reachable_communities": 1,
+        "road_access_fraction": 0.8888888888888888
+      },
+      "token_sites": [
+        {
+          "type": "bridge",
+          "site": "crossing_west",
+          "source": "replay"
         },
         {
           "type": "person",
@@ -155,12 +205,12 @@
     },
     {
       "label": "bridge_moved",
-      "at": "2026-10-18T11:50:19.428Z",
-      "elapsed_ms": 10321.1617,
+      "at": "2026-10-18T13:13:31.414Z",
+      "elapsed_ms": 10713.6079,
       "phase": "CROSSING",
       "projector_phase": "CROSSING",
-      "world_version": 6,
-      "projector_world_version": 6,
+      "world_version": 9,
+      "projector_world_version": 9,
       "simulation_stage": 1,
       "surge": "not_due",
       "syncing": false,
@@ -203,12 +253,12 @@
     },
     {
       "label": "retry_after_move_and_remove_with_duplicate_rejected",
-      "at": "2026-10-18T11:50:19.677Z",
-      "elapsed_ms": 10537.8446,
+      "at": "2026-10-18T13:13:31.672Z",
+      "elapsed_ms": 10914.326,
       "phase": "CROSSING",
       "projector_phase": "CROSSING",
-      "world_version": 8,
-      "projector_world_version": 8,
+      "world_version": 11,
+      "projector_world_version": 11,
       "simulation_stage": 1,
       "surge": "not_due",
       "syncing": false,
@@ -251,12 +301,12 @@
     },
     {
       "label": "relief_services_accepted",
-      "at": "2026-10-18T11:50:39.524Z",
-      "elapsed_ms": 30357.961900000002,
+      "at": "2026-10-18T13:13:51.132Z",
+      "elapsed_ms": 30403.2124,
       "phase": "RELIEF",
       "projector_phase": "RELIEF",
-      "world_version": 11,
-      "projector_world_version": 11,
+      "world_version": 14,
+      "projector_world_version": 14,
       "simulation_stage": 1,
       "surge": "not_due",
       "syncing": false,
@@ -314,12 +364,12 @@
     },
     {
       "label": "surge_50s_truthful_last_stage_failure",
-      "at": "2026-10-18T11:50:59.195Z",
-      "elapsed_ms": 50008.082,
+      "at": "2026-10-18T13:14:10.770Z",
+      "elapsed_ms": 50049.957500000004,
       "phase": "SURGE",
       "projector_phase": "SURGE",
-      "world_version": 11,
-      "projector_world_version": 11,
+      "world_version": 14,
+      "projector_world_version": 14,
       "simulation_stage": 1,
       "surge": "failed",
       "syncing": false,
@@ -377,12 +427,12 @@
     },
     {
       "label": "results_70s",
-      "at": "2026-10-18T11:51:19.397Z",
-      "elapsed_ms": 70261.6978,
+      "at": "2026-10-18T13:14:30.791Z",
+      "elapsed_ms": 70084.511,
       "phase": "RESULTS",
       "projector_phase": "RESULTS",
-      "world_version": 11,
-      "projector_world_version": 11,
+      "world_version": 14,
+      "projector_world_version": 14,
       "simulation_stage": 1,
       "surge": "failed",
       "syncing": false,
@@ -440,12 +490,12 @@
     },
     {
       "label": "finished_75s",
-      "at": "2026-10-18T11:51:24.289Z",
+      "at": "2026-10-18T13:14:35.792Z",
       "elapsed_ms": 75000,
       "phase": "RESULTS",
       "projector_phase": "RESULTS",
-      "world_version": 11,
-      "projector_world_version": 11,
+      "world_version": 14,
+      "projector_world_version": 14,
       "simulation_stage": 1,
       "surge": "failed",
       "syncing": false,
@@ -503,12 +553,12 @@
     },
     {
       "label": "replay_reset_confirmed",
-      "at": "2026-10-18T11:51:24.395Z",
+      "at": "2026-10-18T13:14:35.898Z",
       "elapsed_ms": 0,
       "phase": "IDLE",
       "projector_phase": "IDLE",
-      "world_version": 12,
-      "projector_world_version": 12,
+      "world_version": 15,
+      "projector_world_version": 15,
       "simulation_stage": 0,
       "surge": "not_due",
       "syncing": false,
@@ -531,80 +581,98 @@
   ],
   "websocket_snapshots": [
     {
-      "at": "2026-10-18T11:50:08.586Z",
+      "at": "2026-10-18T13:13:20.190Z",
       "version": 0,
       "phase": "ready",
       "stage": 0
     },
     {
-      "at": "2026-10-18T11:50:08.586Z",
+      "at": "2026-10-18T13:13:20.203Z",
       "version": 1,
       "phase": "ready",
       "stage": 0
     },
     {
-      "at": "2026-10-18T11:50:08.624Z",
+      "at": "2026-10-18T13:13:20.210Z",
       "version": 2,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:08.646Z",
+      "at": "2026-10-18T13:13:20.219Z",
       "version": 3,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:08.671Z",
+      "at": "2026-10-18T13:13:20.276Z",
       "version": 4,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:19.207Z",
+      "at": "2026-10-18T13:13:30.818Z",
       "version": 5,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:19.329Z",
+      "at": "2026-10-18T13:13:30.956Z",
       "version": 6,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:19.453Z",
+      "at": "2026-10-18T13:13:31.075Z",
       "version": 7,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:19.554Z",
+      "at": "2026-10-18T13:13:31.209Z",
       "version": 8,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:39.169Z",
+      "at": "2026-10-18T13:13:31.333Z",
       "version": 9,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:39.297Z",
+      "at": "2026-10-18T13:13:31.444Z",
       "version": 10,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:39.437Z",
+      "at": "2026-10-18T13:13:31.567Z",
       "version": 11,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:51:24.309Z",
+      "at": "2026-10-18T13:13:50.796Z",
       "version": 12,
+      "phase": "disaster_active",
+      "stage": 1
+    },
+    {
+      "at": "2026-10-18T13:13:50.934Z",
+      "version": 13,
+      "phase": "disaster_active",
+      "stage": 1
+    },
+    {
+      "at": "2026-10-18T13:13:51.060Z",
+      "version": 14,
+      "phase": "disaster_active",
+      "stage": 1
+    },
+    {
+      "at": "2026-10-18T13:14:35.844Z",
+      "version": 15,
       "phase": "ready",
       "stage": 0
     }

@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { resolve } from "node:path";
 import { act, create } from "react-test-renderer";
@@ -7,6 +7,7 @@ import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { BoardSvg } from "../../src/game/overlays/BoardSvg";
 import { PIECE_NAME } from "../../src/game/story";
 import { buildResults } from "../../src/game/results";
+import { StartScreen } from "../../src/routes/operator/StartScreen";
 
 // Real HTTP, real WebSockets, real BroadcastChannel, real reducer, real 75 seconds.
 // React test rendering verifies behavior/markup; it cannot verify browser pixels.
@@ -58,9 +59,18 @@ beforeAll(async () => {
     server.listen(0, "127.0.0.1", () => { const address = server.address() as { port: number }; server.close(() => r(address.port)); });
   });
   baseUrl = `http://127.0.0.1:${port}`;
+  // Controlled test calibration, never used by the launcher or described as measured hardware.
+  const calibrationFolder = resolve(root, ".runtime/ui-physical-test-" + port);
+  mkdirSync(calibrationFolder, { recursive: true });
+  const registration = JSON.parse(readFileSync(resolve(root, "perception/board_registration.json"), "utf8"));
+  registration.status = "MEASURED";
+  registration.markers.forEach((m: any) => m.verified = true);
+  registration.aruco.marker_size_mm = 40;
+  writeFileSync(resolve(calibrationFolder, "markers.json"), JSON.stringify(registration));
+  writeFileSync(resolve(calibrationFolder, "mapping.json"), JSON.stringify({ status: "MEASURED", scenario_id: "nepal_rasuwa_hot_v1", print_to_world: [1,0,.1,0,1,0,0,0,1], measured_by: "AUTOMATED TEST ONLY", measured_on: "TEST FIXTURE", source: "Controlled software inputs, not a hardware measurement" }));
   backend = spawn(python, ["-m", "uvicorn", "backend.main:app", "--host", "127.0.0.1", "--port", String(port)], {
     cwd: root, windowsHide: true, stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, PYTHONUTF8: "1", FLOODSHIFT_SCENARIO: "nepal_rasuwa_hot_v1", FLOODSHIFT_SESSION: "" },
+    env: { ...process.env, PYTHONUTF8: "1", FLOODSHIFT_SCENARIO: "nepal_rasuwa_hot_v1", FLOODSHIFT_SESSION: "", FLOODSHIFT_BOARD_MAPPING: resolve(calibrationFolder, "mapping.json"), FLOODSHIFT_BOARD_REGISTRATION: resolve(calibrationFolder, "markers.json") },
   });
   backend.stdout!.on("data", data => { backendLog += data.toString(); });
   backend.stderr!.on("data", data => { backendLog += data.toString(); });
@@ -76,6 +86,7 @@ beforeAll(async () => {
   const events = new EventTarget();
   vi.stubGlobal("window", { setInterval, clearInterval, setTimeout, clearTimeout, innerWidth: 1920, innerHeight: 1080,
     location: { search: "?mode=screen" }, confirm: () => true,
+    dispatchEvent: events.dispatchEvent.bind(events),
     addEventListener: events.addEventListener.bind(events), removeEventListener: events.removeEventListener.bind(events) });
   const storage = () => { const data = new Map(); return { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => data.set(k, v) }; };
   vi.stubGlobal("localStorage", storage());
@@ -83,7 +94,7 @@ beforeAll(async () => {
   const { OperatorRoute } = await import("../../src/routes/operator/OperatorRoute");
   const { ProjectorRoute } = await import("../../src/routes/projector/ProjectorRoute");
   await act(async () => { operator = create(<OperatorRoute />); projector = create(<ProjectorRoute />); });
-  await until(() => operator.root.findAllByType(BoardSvg).length > 0 && projector.root.findAllByType(BoardSvg).length > 0 && !!board().snapshot && !!projected().snapshot);
+  await until(() => operator.root.findAllByType(StartScreen).length > 0 && projector.root.findAllByType(BoardSvg).length > 0 && !!projected().snapshot);
 });
 
 afterAll(async () => {
@@ -98,8 +109,12 @@ it("plays both UI screens for 75 real seconds, including correction, surge failu
     try { const m = JSON.parse(String(event.data)); if (m.type === "world.snapshot") actions.push({ at: new Date().toISOString(), version: m.payload.world_version, phase: m.payload.phase, stage: m.payload.simulation_stage }); } catch { /* pong */ }
   });
   try {
-    await until(() => operator.root.findAllByType("button").some(b => text(b) === "START GAME" && !b.props.disabled));
-    await click("START GAME");
+    await until(() => operator.root.findAllByType("button").some(b => text(b) === "START" && !b.props.disabled));
+    expect(operator.root.findAllByType("button")).toHaveLength(1);
+    await click("START");
+    const openTools = new Event("keydown");
+    Object.defineProperty(openTools, "key", { value: "o" });
+    act(() => window.dispatchEvent(openTools));
     await until(() => board().snapshot.population_demand.length === 2 && projected().clock.phase === "WARNING");
     capture("digital_start_with_both_population_records");
     await click("PAUSE");
@@ -111,9 +126,29 @@ it("plays both UI screens for 75 real seconds, including correction, surge failu
     await until(() => projected().clock.phase === "CROSSING");
     capture("crossing_10s");
     const pad = () => operator.root.findAllByType("circle").find(c => c.props["aria-label"]?.includes("(crossing_east)"))!;
-    await act(async () => { pad().props.onClick(); });
+    const post = (path: string, body: unknown) => fetch(baseUrl+path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json());
+    const epoch = (await (await fetch(baseUrl+"/perception/status")).json()).integration.world_epoch;
+    const observe = async (site: string, lifecycle: string, confidence_band = "high") => {
+      await post("/perception/status", { registration: { valid: true, registration_verified: true } });
+      const uv = board().scenario.sites.find((s: any) => s.id === site).board_uv;
+      return post("/perception/physical", { event_id: crypto.randomUUID(), session_id: "controlled-camera-test", world_epoch: epoch,
+        track_id: "controlled-track", piece_class: "bridge", class_source: "perceptron", lifecycle, confidence_band,
+        observed_at_ms: Date.now(), source: "recording", frame_provenance: "TEST: controlled observations; not real camera detections", board_uv: { u: uv[0]-.1, v: uv[1] }, geometry: { bbox_mm: [70,40] }, orientation_deg: 0 });
+    };
+    const versionBefore = board().snapshot.world_version;
+    await act(async () => { await observe("crossing_east", "candidate", "review"); });
+    await until(() => projected().pending.some((o: any) => o.token_id === "controlled-track"));
+    expect(board().snapshot.world_version).toBe(versionBefore);
+    await act(async () => { expect((await observe("crossing_east", "placed")).accepted).toBe(true); });
     await until(() => board().snapshot.tokens.some((t: any) => t.type === "bridge"));
-    capture("bridge_accepted");
+    capture("controlled_physical_bridge_accepted");
+    await act(async () => { expect((await observe("crossing_west", "moved")).accepted).toBe(true); });
+    await until(() => projected().snapshot.tokens.some((t: any) => t.type === "bridge" && t.site_id === "crossing_west"));
+    capture("controlled_physical_bridge_moved");
+    await act(async () => { expect((await observe("crossing_west", "removed")).removed).toBe(true); });
+    await until(() => !projected().snapshot.tokens.some((t: any) => t.type === "bridge"));
+    await act(async () => { expect((await observe("crossing_east", "placed")).accepted).toBe(true); });
+    await until(() => board().snapshot.tokens.some((t: any) => t.type === "bridge"));
     const bridge = board().snapshot.tokens.find((t: any) => t.type === "bridge");
     await select("Piece to move", bridge.id);
     await select("Destination site", "crossing_west");
@@ -159,9 +194,9 @@ it("plays both UI screens for 75 real seconds, including correction, surge failu
     expect(board().snapshot.tokens).toEqual([]);
     capture("replay_reset_confirmed");
     const evidence = { kind: "floodshift.ui.live-test", verified_at: new Date().toISOString(), scenario_id: final.scenario_id,
-      execution: "React test renderer + real HTTP/WebSocket/BroadcastChannel + real monotonic 75-second clock",
+      execution: "React test renderer + real HTTP/WebSocket/BroadcastChannel + real monotonic 75-second clock; controlled PhysicalObservation inputs and test calibration, not live detections",
       browser_visual_check: "NOT RUN: no browser session available", physical_board_check: "NOT RUN",
-      assertions: ["both routes mounted", "digital START and two population records", "pause/resume", "manual bridge place/move/remove/retry", "duplicate placement rejected", "three facilities accepted", "exactly one timed surge rejected last_stage", "input closed at 70s", "finished at 75s", "backend-derived results", "replay clears world"],
+      assertions: ["both routes mounted", "START-only laptop view", "operator tools preserve clock", "digital START and two population records", "pause/resume acknowledges backend input gate", "controlled physical pending/place/move/remove reaches projector", "manual correction and duplicate rejection", "three facilities accepted", "one timed surge rejected last_stage", "backend physical input closed and final state captured at 70s", "finished at 75s", "backend-derived results", "replay clears world and epoch"],
       frames, websocket_snapshots: actions, final_results: results };
     const folder = resolve(root, "docs/evidence");
     mkdirSync(folder, { recursive: true });

@@ -318,9 +318,34 @@ export interface BranchComparison {
   metric_provenance: string;
 }
 
+export interface PhysicalFeedback {
+  event_id: string;
+  track_id: string;
+  session_id: string;
+  accepted: boolean;
+  applied: boolean;
+  status: "pending" | "accepted" | "rejected" | "removed";
+  board_uv: UV | null;
+  rejection_reason: string | null;
+  world_token_id: string | null;
+  footprint_key?: string;
+  print_footprint?: UV[];
+}
+
+export interface ProjectionRegistration {
+  ready: boolean;
+  reason?: string | null;
+  print_to_world?: number[];
+  world_to_print?: number[];
+  board?: { width_mm: number; height_mm: number };
+  markers?: { id: number; center_uv: UV }[];
+  marker_size_mm?: number;
+  occlusions?: Record<string, UV[]>;
+}
+
 export type Envelope =
   | { type: "world.snapshot"; seq: number; sent_at: string; payload: WorldSnapshot }
-  | { type: "vision.status"; seq: number; sent_at: string; payload: { observations: ObjectObservation[]; latency_ms?: number } }
+  | { type: "vision.status"; seq: number; sent_at: string; payload: { observations: ObjectObservation[]; latency_ms?: number; physical_feedback?: PhysicalFeedback } }
   | { type: "narration"; seq: number; sent_at: string; payload: { text: string; source: "gemini" | "template" } }
   | { type: "warning"; seq: number; sent_at: string; payload: { code: string; message: string } }
   | { type: "server.hello"; seq?: number; sent_at?: string; payload: { status: string } };

@@ -7,6 +7,8 @@ routes, never scores, and never invents a class. Classification is Lane C's
 
 ## Setup
 
+The integrated game path is documented in [PHYSICAL_INTEGRATION](../docs/PHYSICAL_INTEGRATION.md). Install the root `requirements.txt` for the Perceptron SDK as well as this package's CV dependencies. `perception.fusion:create_classifier` implements the service's ClassifierPort; the gateway adapter now lives at `/perception/physical`.
+
 ```
 python -m venv .venv
 .venv/bin/pip install -r perception/requirements.txt
@@ -22,8 +24,7 @@ python -m venv .venv
 .venv/bin/python -m perception.service --source http://192.168.1.20:4747/video      # DroidCam MJPEG
 .venv/bin/python -m perception.service --source 1 --record assets/live_captures/run1  # record evidence
 .venv/bin/python -m perception.service --source assets/live_captures/run1/frames      # replay it
-.venv/bin/python -m perception.service --observe-url http://localhost:8000/<adapter> --status-url http://localhost:8000/perception/status
-.venv/bin/python -m perception.service --classifier perception.perceptron_adapter:create_classifier   # Dev 2 plug-in
+.venv/bin/python -m perception.service --classifier perception.fusion:create_classifier --observe-url http://localhost:8010/perception/physical --status-url http://localhost:8010/perception/status
 ```
 
 **DroidCam.** On macOS DroidCam appears either as a virtual camera (an index from

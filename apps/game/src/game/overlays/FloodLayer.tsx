@@ -134,6 +134,8 @@ function FloodStage({ id, patterns, shapes, earlier, inset }: { id: string; patt
         </mask>
         <mask id={`${id}-rim`} maskUnits="userSpaceOnUse" x={0} y={0} width={BOARD_WIDTH} height={BOARD_HEIGHT}>
           <rect width={BOARD_WIDTH} height={BOARD_HEIGHT} fill="#fff" />
+          {/* The lip is a boundary, not a bright fill over the whole river corridor. */}
+          <ShapePaint shapes={shapes} color="#000" />
           {exclusions}
         </mask>
         <clipPath id={`${id}-reveal`}>

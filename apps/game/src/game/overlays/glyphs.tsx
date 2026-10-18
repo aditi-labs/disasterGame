@@ -12,6 +12,18 @@ export const PIECE_COLOR: Partial<Record<TokenType, string>> = {
   bridge: PALETTE.bridge,
 };
 
+/** Restrained Matsya engraving, used in the title margin rather than the mapped terrain. */
+export function MatsyaMark({ size = 64 }: { size?: number }) {
+  return (
+    <g transform={"scale(" + size / 100 + ")"} fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M-30 0 C-10 -23 21 -24 38 0 C21 24 -10 23 -30 0 L-48 -18 L-40 0 L-48 18 Z" />
+      <path d="M23 -12 L30 -26 L33 -12 M-8 -17 Q-1 -29 9 -18 M-8 17 Q-1 29 9 18 M-21 -8 Q-1 -16 17 -9 M-23 0 Q-2 -7 17 0 M-21 8 Q-1 16 17 9 M22 -11 Q15 0 22 11" />
+      <circle cx={29} cy={-2} r={1.2} fill="currentColor" stroke="none" />
+      <path d="M-59 30 C-25 20 -10 39 19 30 S59 27 66 30 M-64 39 C-32 29 -12 47 18 39 S58 35 70 39" opacity={0.5} />
+    </g>
+  );
+}
+
 export function PieceGlyph({ type, size = 18, color }: { type: TokenType; size?: number; color?: string }) {
   const s = size / 2;
   const c = color ?? PIECE_COLOR[type] ?? PALETTE.text;

@@ -100,7 +100,8 @@ class PerceptronAdapter:
             try:
                 import perceptron
                 if self.config.api_key:
-                    perceptron.configure(api_key=self.config.api_key)
+                    perceptron.configure(api_key=self.config.api_key, provider="perceptron",
+                                         timeout=self.config.timeout_ms / 1000, base_url=self.config.base_url)
                     self._client = perceptron  # Store module reference
                     self._status = PerceptronStatus.CONNECTED
                     logger.info("Perceptron SDK initialized successfully")
@@ -301,15 +302,8 @@ class PerceptronAdapter:
             # Convert image to base64
             image_b64 = self._image_to_base64(image)
 
-            # Build the prompt for classification
-            class_descriptions = self._build_class_descriptions(classes)
-
             # Try using the detect endpoint first
             response = self._call_detect_api(image_b64, classes)
-
-            if response is None:
-                # Fallback to chat completions with structured output
-                response = self._call_chat_api(image_b64, class_descriptions)
 
             latency_ms = (time.time() - start_time) * 1000
 
@@ -349,19 +343,6 @@ class PerceptronAdapter:
                 error_message=str(e)
             )
 
-    def _build_class_descriptions(self, classes: list[str]) -> str:
-        """Build detailed class descriptions for the model."""
-        # ACTUAL TOKEN COLORS - verified by viewing the real photos
-        descriptions = {
-            "bridge": "A YELLOW bridge piece - elongated shape with railings, used for crossing rivers",
-            "hospital": "A PINK/MAGENTA cross on WHITE base - medical cross symbol, provides medical care",
-            "shelter": "A white shelter/refuge piece - house-shaped with roof, provides housing/refuge",
-            "food_station": "A WHITE base with BLUE circles/rings - food supply station"
-        }
-        return "\n".join([
-            f"- {cls}: {descriptions.get(cls, f'A {cls} game piece')}"
-            for cls in classes
-        ])
 
     def _call_detect_api(self, image_b64: str, classes: list[str]) -> Optional[dict]:
         """
@@ -380,17 +361,18 @@ class PerceptronAdapter:
             image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
             # Use perceptron.detect with perceptron.image wrapper
-            media = self._client.image(image)
-            result = self._client.detect(media, classes=classes)
+            media = self._client.image(img_bytes)
+            result = self._client.detect(media, classes=classes, model=self.config.model,
+                                         reasoning_effort=self.config.reasoning_effort)
 
-            if result and result.boxes:
+            if result and getattr(result, "boxes", None) and not getattr(result, "errors", None) and getattr(result, "complete", True):
                 # Convert to our format
                 # Note: top_left/bottom_right are SinglePoint objects with .x and .y
                 detections = []
                 for box in result.boxes:
                     detections.append({
                         "class": box.mention,
-                        "confidence": "high",  # Perceptron doesn't return numeric confidence
+                        "confidence": getattr(box, "confidence", None),
                         "bbox": {
                             "x1": box.top_left.x,
                             "y1": box.top_left.y,
@@ -407,134 +389,10 @@ class PerceptronAdapter:
 
         return None
 
-    def _call_chat_api(self, image_b64: str, class_descriptions: str) -> Optional[dict]:
-        """
-        Call perceptron.question() for classification when detect doesn't work.
 
-        Uses natural language question about the piece.
-        """
-        if self._client is None:
-            return None
-
-        try:
-            import cv2
-            import json
-
-            # Decode base64 back to image
-            img_bytes = base64.b64decode(image_b64)
-            nparr = np.frombuffer(img_bytes, np.uint8)
-            image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-            # Use perceptron.question for classification
-            prompt = f"""Analyze this top-down image of a game piece.
-Identify which type it is based on color:
-
-{class_descriptions}
-
-Respond with ONLY a JSON object (no other text):
-{{"class": "bridge|hospital|shelter|food_station|unknown", "confidence": "high|medium|low"}}
-"""
-            media = self._client.image(image)
-            result = self._client.question(media, prompt)
-
-            if result and result.text:
-                # Try to parse JSON from response
-                text = result.text.strip()
-                # Find JSON in response
-                if '{' in text and '}' in text:
-                    json_start = text.index('{')
-                    json_end = text.rindex('}') + 1
-                    json_str = text[json_start:json_end]
-                    parsed = json.loads(json_str)
-                    return {
-                        "detections": [{
-                            "class": parsed.get("class", "unknown"),
-                            "confidence": parsed.get("confidence", "low"),
-                        }]
-                    }
-
-        except Exception as e:
-            logger.debug(f"Question API call failed: {e}")
-
-        return None
-
-    def classify_with_references(
-        self,
-        image: np.ndarray,
-        use_few_shot: bool = True
-    ) -> PerceptronResponse:
-        """
-        Classify using the Perceptron detect API.
-
-        Uses color-based class descriptions for accurate detection.
-        """
-        start_time = time.time()
-
-        if not self.is_available:
-            return PerceptronResponse(
-                success=False,
-                detections=[],
-                raw_response=None,
-                latency_ms=0,
-                error_message="Perceptron API not available"
-            )
-
-        try:
-            # Use detect with specific color AND shape descriptions
-            # ACTUAL TOKEN COLORS - verified by viewing the real photos
-            classes = [
-                "yellow bridge piece with railings",
-                "pink/magenta cross on white base (hospital)",
-                "white base with blue circles (food station)",
-                "white house-shaped shelter piece with roof"
-            ]
-
-            media = self._client.image(image)
-            result = self._client.detect(media, classes=classes)
-
-            if result and result.boxes:
-                # Map detected class back to our standard names
-                detected = result.boxes[0].mention.lower()
-
-                if "bridge" in detected:
-                    class_name = "bridge"
-                elif "hospital" in detected:
-                    class_name = "hospital"
-                elif "food" in detected:
-                    class_name = "food_station"
-                elif "shelter" in detected:
-                    class_name = "shelter"
-                else:
-                    class_name = "unknown"
-
-                # Note: top_left/bottom_right are SinglePoint objects with .x and .y
-                box = result.boxes[0]
-                return PerceptronResponse(
-                    success=True,
-                    detections=[{
-                        "class": class_name,
-                        "confidence": "high",
-                        "bbox": {
-                            "x1": box.top_left.x,
-                            "y1": box.top_left.y,
-                            "x2": box.bottom_right.x,
-                            "y2": box.bottom_right.y
-                        }
-                    }],
-                    raw_response={"text": result.text, "boxes": len(result.boxes)},
-                    latency_ms=(time.time() - start_time) * 1000
-                )
-
-        except Exception as e:
-            logger.error(f"Classification error: {e}")
-
-        return PerceptronResponse(
-            success=False,
-            detections=[],
-            raw_response=None,
-            latency_ms=(time.time() - start_time) * 1000,
-            error_message="Classification failed"
-        )
+    def classify_with_references(self, image: np.ndarray, use_few_shot: bool = True) -> PerceptronResponse:
+        """Use canonical piece labels; unannotated reference photos are not SDK examples."""
+        return self._classify_sync(image, ["bridge", "hospital", "shelter", "food_station"])
 
     def get_telemetry(self) -> dict:
         """Get diagnostic telemetry for operator display."""

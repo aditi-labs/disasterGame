@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import type { LiveWorld } from "../../live/useLiveWorld";
-import type { ActionResult, TokenType, UV } from "../../types/contracts";
+import type { ActionResult, TokenType, UV, WorldSnapshot } from "../../types/contracts";
 import { openChannel, type ChannelMessage, type ProjectorCommand, type RejectionCue } from "../../game/channel";
 import { clockReducer, clockView, INITIAL_CLOCK, phaseOf, surgeActionId, surgeDue, inputOpen as clockInputOpen } from "../../game/clock";
 import { play, unlockAudio } from "../../game/sound";
@@ -44,9 +44,32 @@ export function useMission(world: LiveWorld) {
   const worldRef = useRef(world);
   worldRef.current = world;
   const operationPending = useRef(false);
-  const resultsSyncing = world.inFlight > 0 || world.status !== "live" || (world.snapshot?.world_version ?? -1) < world.knownVersion();
+  const phase = phaseOf(clock, now);
+  const [finalState, setFinalState] = useState<{ sessionId: string; snapshot: WorldSnapshot } | null>(null);
+  const closing = useRef(false);
+  const closeRetryAt = useRef(0);
+  const finalSnapshot = phase === "RESULTS" && finalState?.sessionId === clock.sessionId ? finalState.snapshot : null;
+  const awaitingWorld = world.inFlight > 0 || world.status !== "live" || (world.snapshot?.world_version ?? -1) < world.knownVersion();
+  const resultsSyncing = awaitingWorld || (phase === "RESULTS" && !finalSnapshot);
+  const finalRef = useRef(finalSnapshot);
+  finalRef.current = finalSnapshot;
   const syncingRef = useRef(resultsSyncing);
   syncingRef.current = resultsSyncing;
+
+  // Close physical input under the backend mutation lock, then capture its snapshot.
+  useEffect(() => {
+    if (phase !== "RESULTS") {
+      setFinalState(null);
+    } else if (!finalSnapshot && !closing.current && now >= closeRetryAt.current && !awaitingWorld && clock.sessionId) {
+      const sessionId = clock.sessionId;
+      closing.current = true;
+      void world.controlRun(sessionId, "close").then(result => {
+        if (!result.snapshot) throw new Error("Final snapshot unavailable");
+        if (clockRef.current.sessionId === sessionId) setFinalState({ sessionId, snapshot: result.snapshot });
+      }).catch(() => { closeRetryAt.current = performance.now() + 2000; setNotice("Final state not confirmed. Reconnect to complete results."); })
+        .finally(() => { closing.current = false; });
+    }
+  }, [phase, clock.sessionId, awaitingWorld, world.snapshot, finalSnapshot, now]);
 
   useEffect(() => {
     const onMessage = (m: ChannelMessage) => {
@@ -68,14 +91,13 @@ export function useMission(world: LiveWorld) {
 
   // Broadcast the clock to the projector (on change and every 250 ms).
   useEffect(() => {
-    const id = window.setInterval(() => channel.current?.post({ t: "clock", view: clockView(clockRef.current, performance.now()), sentAt: Date.now(), syncing: syncingRef.current }), 250);
+    const id = window.setInterval(() => channel.current?.post({ t: "clock", view: clockView(clockRef.current, performance.now()), sentAt: Date.now(), syncing: syncingRef.current, finalSnapshot: finalRef.current }), 250);
     return () => window.clearInterval(id);
   }, []);
   useEffect(() => {
-    channel.current?.post({ t: "clock", view: clockView(clock, performance.now()), sentAt: Date.now(), syncing: resultsSyncing });
-  }, [clock, resultsSyncing]);
+    channel.current?.post({ t: "clock", view: clockView(clock, performance.now()), sentAt: Date.now(), syncing: resultsSyncing, finalSnapshot });
+  }, [clock, resultsSyncing, finalSnapshot]);
 
-  const phase = phaseOf(clock, now);
   const lastPhase = useRef(phase);
   useEffect(() => {
     if (phase === lastPhase.current) return;
@@ -121,7 +143,7 @@ export function useMission(world: LiveWorld) {
    */
   const startGame = useCallback(async () => {
     const { scenario } = world;
-    if (operationPending.current || !["idle", "intro"].includes(clockRef.current.mode)) return;
+    if (operationPending.current || !["idle", "intro", "finished"].includes(clockRef.current.mode)) return;
     unlockAudio();
     setStartError(null);
     setNotice(null);
@@ -143,10 +165,12 @@ export function useMission(world: LiveWorld) {
         else throw new Error(`Population ${site.id} not placed: ${r?.rejection_reason ?? "request failed"}. Reset and retry START.`);
       }
       if (!populated) throw new Error("no scenario population record could be placed");
+      await world.controlRun(sessionId, "start");
       surgeSent.current = null;
       setRejections([]);
       clearAll();
       command("exit-tools");
+      if (clockRef.current.mode === "finished") dispatch({ type: "reset" });
       dispatch({ type: "start", sessionId, now: performance.now() });
       setStartedAt(new Date().toISOString());
       play("bell");
@@ -218,6 +242,19 @@ export function useMission(world: LiveWorld) {
     return r;
   }, [world]);
 
+  const transition = async (state: "pause" | "resume") => {
+    const sessionId = clockRef.current.sessionId;
+    if (!sessionId || operationPending.current) return;
+    operationPending.current = true;
+    try {
+      await worldRef.current.controlRun(sessionId, state);
+      dispatch({ type: state, now: performance.now() });
+      setNotice(null);
+    } catch {
+      setNotice(`${state.toUpperCase()} was not confirmed by the backend.`);
+    } finally { operationPending.current = false; }
+  };
+
   return {
     clock,
     now,
@@ -225,6 +262,7 @@ export function useMission(world: LiveWorld) {
     view: clockView(clock, now),
     inputOpen: clockInputOpen(clock, now) && world.status === "live" && world.inFlight === 0,
     resultsSyncing,
+    finalSnapshot,
     projector,
     startError,
     starting,
@@ -233,9 +271,8 @@ export function useMission(world: LiveWorld) {
     rejections,
     startGame,
     resetGame,
-    intro: () => dispatch({ type: "intro" }),
-    pause: () => dispatch({ type: "pause", now: performance.now() }),
-    resume: () => dispatch({ type: "resume", now: performance.now() }),
+    pause: () => transition("pause"),
+    resume: () => transition("resume"),
     end: () => dispatch({ type: "end", now: performance.now() }),
     advanceFlood,
     suggestBridge,

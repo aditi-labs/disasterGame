@@ -5,9 +5,10 @@ import { CLOCK_STALE_MS, extrapolateClock, FREEZE_AT_MS, IDLE_VIEW, type ClockVi
 import { calibrationMatrix3d, DEFAULT_CALIBRATION, type Calibration } from "../../game/homography";
 import { BoardSvg } from "../../game/overlays/BoardSvg";
 import { buildResults } from "../../game/results";
-import { BEATS, LIVE_DATA_UNAVAILABLE } from "../../game/story";
+import { BEATS, LIVE_DATA_UNAVAILABLE, rejectionCopy } from "../../game/story";
 import { buildBoardModel } from "../../game/worldAdapter";
-import { BOARD_REGISTRATION_REQUIRED, PRINT_WORLD_ALIGNMENT_VERIFIED } from "../../game/board";
+import { BOARD_REGISTRATION_REQUIRED } from "../../game/board";
+import type { WorldSnapshot } from "../../types/contracts";
 
 // /projector — fullscreen projection over the printed board. No diagnostics, no code
 // labels, no sound. Retained keys (floodshift- ProjectionView):
@@ -45,12 +46,14 @@ export function ProjectorRoute() {
   const [cal, setCal] = useState<Calibration>(loadCal);
   const [clock, setClock] = useState<{ view: ClockView; sentAt: number }>({ view: IDLE_VIEW, sentAt: performance.now() });
   const [syncing, setSyncing] = useState(false);
+  const [finalSnapshot, setFinalSnapshot] = useState<WorldSnapshot | null>(null);
   const [rejections, setRejections] = useState<RejectionCue[]>([]);
   const [, setTick] = useState(0);
   const stageRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: window.innerWidth, h: window.innerHeight });
   const channel = useRef<ReturnType<typeof openChannel> | null>(null);
   const clearPending = world.clearPending;
+  const alignmentReady = world.registration?.ready === true;
 
   useEffect(() => saveCal(cal), [cal]);
 
@@ -60,6 +63,7 @@ export function ProjectorRoute() {
         case "clock":
           setClock({ view: m.view, sentAt: performance.now() });
           setSyncing(m.syncing);
+          setFinalSnapshot(m.finalSnapshot ?? null);
           break;
         case "reject":
           setRejections((list) => [...list.filter((r) => r.until > Date.now()), m.cue]);
@@ -89,11 +93,11 @@ export function ProjectorRoute() {
   // Projector health for the operator status line.
   useEffect(() => {
     const send = () =>
-      channel.current?.post({ t: "projector-health", overlay, calibrating, testing, calibratedAt: PRINT_WORLD_ALIGNMENT_VERIFIED ? cal.savedAt : null, alignmentVerified: PRINT_WORLD_ALIGNMENT_VERIFIED, sentAt: Date.now() });
+      channel.current?.post({ t: "projector-health", overlay, calibrating, testing, calibratedAt: alignmentReady ? cal.savedAt : null, alignmentVerified: alignmentReady, sentAt: Date.now() });
     send();
     const id = window.setInterval(send, 1000);
     return () => window.clearInterval(id);
-  }, [overlay, calibrating, testing, cal.savedAt]);
+  }, [overlay, calibrating, testing, cal.savedAt, alignmentReady]);
 
   useEffect(() => {
     const id = window.setInterval(() => setTick((n) => n + 1), 250);
@@ -157,8 +161,9 @@ export function ProjectorRoute() {
     return () => window.removeEventListener("keydown", onKey);
   }, [calibrating, corner]);
 
-  const { snapshot, scenario, scenarioError, scenarioMismatch, reactions, observations } = world;
+  const { scenario, scenarioError, scenarioMismatch, reactions, observations } = world;
   const view = extrapolateClock(clock.view, clock.sentAt, performance.now());
+  const snapshot = view.phase === "RESULTS" && finalSnapshot ? finalSnapshot : world.snapshot;
   const clockStale = view.sessionId != null && performance.now() - clock.sentAt > CLOCK_STALE_MS;
   const open = !clockStale && world.status === "live" && (view.mode === "running" || view.mode === "paused") && view.elapsedMs < FREEZE_AT_MS;
   const model = useMemo(
@@ -166,30 +171,40 @@ export function ProjectorRoute() {
     [scenario, snapshot, view.phase, open],
   );
   const results = useMemo(() => (scenario && snapshot && view.phase === "RESULTS" ? buildResults(scenario, snapshot) : null), [scenario, snapshot, view.phase]);
-  const pending = [...observations.values()].filter((o) => o.vision_status === "pending" && !snapshot?.tokens.some((t) => t.id === o.token_id));
-  const registrationBlocked = overlay && !PRINT_WORLD_ALIGNMENT_VERIFIED;
+  const feedback = (world.physicalFeedback ?? []).filter(f => f.until > Date.now() && f.board_uv);
+  const physicalPending = feedback.filter(f => f.status === "pending").map(f => ({ token_id: f.track_id, board_uv: f.board_uv! }));
+  const pending = [...[...observations.values()].filter((o) => o.vision_status === "pending" && !snapshot?.tokens.some((t) => t.id === o.token_id)), ...physicalPending];
+  const physicalRejections = feedback.filter(f => f.status === "rejected").map(f => ({ id: f.event_id, uv: f.board_uv!, text: rejectionCopy(f.rejection_reason), until: f.until }));
+  const registrationBlocked = overlay && !alignmentReady;
   const hold = !scenario || !snapshot ? LIVE_DATA_UNAVAILABLE : registrationBlocked ? BOARD_REGISTRATION_REQUIRED : null;
   const transform = calibrationMatrix3d(cal, size.w, size.h);
+  const print = world.registration?.board;
+  const printWidth = print ? Math.min(size.w, size.h * print.width_mm / print.height_mm) : size.w;
+  const printHeight = print ? printWidth * print.height_mm / print.width_mm : size.h;
+  const frame = overlay && alignmentReady ? { position: "absolute" as const, left: (size.w-printWidth)/2, top: (size.h-printHeight)/2, width: printWidth, height: printHeight } : { width: "100%", height: "100%" };
 
   return (
     <div className={`projector ${overlay ? "projector-overlay" : "projector-screen"}`}>
       <div ref={stageRef} className="projector-stage" style={{ transform, transformOrigin: "0 0" }}>
+        <div className="projection-frame" style={frame}>
         {scenario ? (
           <BoardSvg
             scenario={scenario}
             snapshot={snapshot}
             model={model}
             clock={view}
-            reactions={reactions}
-            rejections={rejections}
-            pending={pending}
+            reactions={view.phase === "RESULTS" ? [] : reactions}
+            rejections={view.phase === "RESULTS" ? [] : [...rejections, ...physicalRejections]}
+            pending={view.phase === "RESULTS" ? [] : pending}
             surface={overlay ? "overlay" : "screen"}
             variant="projector"
             results={results}
-            resultsSyncing={syncing || world.status !== "live" || clockStale}
+            resultsSyncing={syncing || (view.phase === "RESULTS" && !finalSnapshot) || world.status !== "live" || clockStale}
             connectionLost={world.status !== "live" || clockStale}
             hold={hold}
             testPattern={!registrationBlocked && (testing || calibrating)}
+            registration={overlay ? world.registration : null}
+            occlusions={Object.values(world.footprints ?? {})}
           />
         ) : (
           <div className="projector-hold">
@@ -200,6 +215,7 @@ export function ProjectorRoute() {
             </div>
           </div>
         )}
+        </div>
       </div>
       {calibrating && (
         <div className="cal-panel">
