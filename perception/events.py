@@ -272,3 +272,66 @@ def make_event_id(session_id: str, track_id: str, lifecycle: Lifecycle, emission
 
 def _opt_float(value: Any) -> float | None:
     return None if value is None else float(value)
+
+
+# =============================================================================
+# Dev 2 additions (Perceptron classification support)
+# =============================================================================
+
+@dataclass
+class BoundingBox:
+    """Bounding box in pixel coordinates (for ROI extraction)."""
+    x1: int  # Left
+    y1: int  # Top
+    x2: int  # Right
+    y2: int  # Bottom
+
+    @property
+    def width(self) -> int:
+        return self.x2 - self.x1
+
+    @property
+    def height(self) -> int:
+        return self.y2 - self.y1
+
+    @property
+    def center(self) -> tuple[int, int]:
+        return ((self.x1 + self.x2) // 2, (self.y1 + self.y2) // 2)
+
+    @property
+    def area(self) -> int:
+        return self.width * self.height
+
+
+# Mapping from raw Perceptron labels to PieceClass
+PERCEPTRON_LABEL_MAP: dict[str, PieceClass] = {
+    # Primary labels
+    "bridge": PieceClass.BRIDGE,
+    "hospital": PieceClass.HOSPITAL,
+    "shelter": PieceClass.SHELTER,
+    "food_station": PieceClass.FOOD_STATION,
+    "food station": PieceClass.FOOD_STATION,
+    "food": PieceClass.FOOD_STATION,
+
+    # Alternative labels the model might return
+    "crossing": PieceClass.BRIDGE,
+    "overpass": PieceClass.BRIDGE,
+    "medical": PieceClass.HOSPITAL,
+    "clinic": PieceClass.HOSPITAL,
+    "refuge": PieceClass.SHELTER,
+    "housing": PieceClass.SHELTER,
+    "supply": PieceClass.FOOD_STATION,
+    "supplies": PieceClass.FOOD_STATION,
+}
+
+
+def map_label_to_class(raw_label: str | None) -> PieceClass | None:
+    """Map a raw label from Perceptron to a PieceClass.
+
+    Case-insensitive matching with fallback to None for unknown.
+    """
+    if not raw_label:
+        return None
+
+    normalized = raw_label.lower().strip()
+    return PERCEPTRON_LABEL_MAP.get(normalized)
