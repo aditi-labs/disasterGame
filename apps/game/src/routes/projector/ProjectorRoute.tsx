@@ -7,6 +7,7 @@ import { BoardSvg } from "../../game/overlays/BoardSvg";
 import { buildResults } from "../../game/results";
 import { BEATS, LIVE_DATA_UNAVAILABLE } from "../../game/story";
 import { buildBoardModel } from "../../game/worldAdapter";
+import { BOARD_REGISTRATION_REQUIRED, PRINT_WORLD_ALIGNMENT_VERIFIED } from "../../game/board";
 
 // /projector — fullscreen projection over the printed board. No diagnostics, no code
 // labels, no sound. Retained keys (floodshift- ProjectionView):
@@ -88,7 +89,7 @@ export function ProjectorRoute() {
   // Projector health for the operator status line.
   useEffect(() => {
     const send = () =>
-      channel.current?.post({ t: "projector-health", overlay, calibrating, testing, calibratedAt: cal.savedAt, sentAt: Date.now() });
+      channel.current?.post({ t: "projector-health", overlay, calibrating, testing, calibratedAt: PRINT_WORLD_ALIGNMENT_VERIFIED ? cal.savedAt : null, alignmentVerified: PRINT_WORLD_ALIGNMENT_VERIFIED, sentAt: Date.now() });
     send();
     const id = window.setInterval(send, 1000);
     return () => window.clearInterval(id);
@@ -166,7 +167,8 @@ export function ProjectorRoute() {
   );
   const results = useMemo(() => (scenario && snapshot && view.phase === "RESULTS" ? buildResults(scenario, snapshot) : null), [scenario, snapshot, view.phase]);
   const pending = [...observations.values()].filter((o) => o.vision_status === "pending" && !snapshot?.tokens.some((t) => t.id === o.token_id));
-  const hold = !scenario || !snapshot ? LIVE_DATA_UNAVAILABLE : null;
+  const registrationBlocked = overlay && !PRINT_WORLD_ALIGNMENT_VERIFIED;
+  const hold = !scenario || !snapshot ? LIVE_DATA_UNAVAILABLE : registrationBlocked ? BOARD_REGISTRATION_REQUIRED : null;
   const transform = calibrationMatrix3d(cal, size.w, size.h);
 
   return (
@@ -187,7 +189,7 @@ export function ProjectorRoute() {
             resultsSyncing={syncing || world.status !== "live" || clockStale}
             connectionLost={world.status !== "live" || clockStale}
             hold={hold}
-            testPattern={testing || calibrating}
+            testPattern={!registrationBlocked && (testing || calibrating)}
           />
         ) : (
           <div className="projector-hold">

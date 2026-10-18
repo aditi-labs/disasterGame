@@ -21,7 +21,7 @@ export type ChannelMessage =
   | { t: "reject"; cue: RejectionCue }
   | { t: "command"; cmd: ProjectorCommand }
   | { t: "clear-pending"; tokenIds: string[] }
-  | { t: "projector-health"; overlay: boolean; calibrating: boolean; testing: boolean; calibratedAt: string | null; sentAt: number };
+  | { t: "projector-health"; overlay: boolean; calibrating: boolean; testing: boolean; calibratedAt: string | null; alignmentVerified: boolean; sentAt: number };
 
 const NAME = "floodshift.game.v1";
 

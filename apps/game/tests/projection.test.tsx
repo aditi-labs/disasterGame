@@ -6,7 +6,8 @@ import { buildResults } from "../src/game/results";
 import { IDLE_VIEW } from "../src/game/clock";
 import { applyHomography, calibrationMatrix3d, DEFAULT_CALIBRATION, solveHomography, targetCorners } from "../src/game/homography";
 import { looksLikeBridgeToCamera, PALETTE } from "../src/game/palette";
-import { BOARD_MARKERS, insideMarkerKeepout } from "../src/game/board";
+import { BOARD_MARKERS, insideMarkerKeepout, MARKER_LAYOUT_VERIFIED, MARKERS_VERIFIED, PRINT_WORLD_ALIGNMENT_VERIFIED } from "../src/game/board";
+import registration from "../../../perception/board_registration.json";
 import { setBoardAspect } from "../src/types/geometry";
 import { fixture } from "./fixtures";
 
@@ -31,7 +32,14 @@ describe("projector registration", () => {
   it("rejects degenerate corner measurements", () => expect(() => solveHomography(src, [[0, 0], [0, 0], [0, 0], [0, 0]])).toThrow(/degenerate/));
   it("keeps registration reticles clear of the provisional marker masks", () => {
     for (const marker of BOARD_MARKERS) expect(insideMarkerKeepout(marker.center)).toBe(true);
-    for (const uv of [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9], [0.5, 0.5]] as [number, number][]) expect(insideMarkerKeepout(uv)).toBe(false);
+    for (const uv of [[0.18, 0.18], [0.82, 0.18], [0.82, 0.82], [0.18, 0.82], [0.5, 0.5]] as [number, number][]) expect(insideMarkerKeepout(uv)).toBe(false);
+  });
+  it("uses Lane B's photo layout without claiming measured positions or print/world alignment", () => {
+    expect(BOARD_MARKERS).toEqual(registration.markers.map(m => ({ id: m.id, center: m.center_uv })));
+    expect(BOARD_MARKERS.map(m => m.id)).toEqual([10, 11, 13, 12]);
+    expect(MARKER_LAYOUT_VERIFIED).toBe(true);
+    expect(MARKERS_VERIFIED).toBe(false);
+    expect(PRINT_WORLD_ALIGNMENT_VERIFIED).toBe(false);
   });
 });
 

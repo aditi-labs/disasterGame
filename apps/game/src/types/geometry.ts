@@ -25,11 +25,3 @@ export function uvToPathD(path: UV[], closed = false): string {
     .join(" ");
   return closed ? `${d} Z` : d;
 }
-
-/** ArUco corner fiducial centres from backend/calibration/board.py; projector must leave these dark. */
-export const FIDUCIAL_CORNERS: UV[] = [
-  [0.04, 0.04],
-  [0.96, 0.04],
-  [0.96, 0.96],
-  [0.04, 0.96],
-];

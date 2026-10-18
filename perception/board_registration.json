@@ -1,0 +1,119 @@
+{
+  "schema": "floodshift.board_registration.v1",
+  "status": "UNVERIFIED_TENTATIVE",
+  "status_note": "IDs, dictionary family, corner layout and printed rotations are VERIFIED from a photo of the physical board (2026-10-18, see docs/BOARD_REGISTRATION.md). Marker centre positions and the board size are PHOTO ESTIMATES (perspective photo, left paper edge cut off) and must be confirmed with a ruler via `python -m perception.service --calibrate`, which rewrites this file with status MEASURED. Until then the service reports registration_verified=false.",
+  "frame_note": "UV frame = the UPRIGHT printed map as the team finalised it (landscape, map labels readable, river entering from the top): u to the right, v down, (0,0) at the paper's top-left corner, (1,1) at its bottom-right. NOTE FOR SHARED INTEGRATION: this print is landscape (height ~0.76 x width) while the scenario's board frame is a 420x420 square; the print-UV -> world board_uv/geo transform is owned by the shared lane and is NOT the identity.",
+  "board": {
+    "scenario_id": "nepal_rasuwa_hot_v1",
+    "width_mm": 594.0,
+    "height_mm": 453.0,
+    "uv_origin": "top_left",
+    "dimensions_source": "PHOTO ESTIMATE: aspect height/width = 0.763 measured from the 2026-10-18 photo after rectification; absolute width ASSUMED 594 mm (A-series) only so that mm-based gates have a scale. Replace both numbers with ruler measurements of the paper."
+  },
+  "aruco": {
+    "dictionary": "DICT_4X4_50",
+    "dictionary_note": "Verified: all four printed markers decode in every 4X4 dictionary (50/100/250/1000 share these IDs). DICT_4X4_50 is used because it is the smallest family that contains them, which maximises decoding margin.",
+    "candidate_dictionaries": [
+      "DICT_4X4_50",
+      "DICT_4X4_100",
+      "DICT_4X4_250",
+      "DICT_5X5_100",
+      "DICT_6X6_250",
+      "DICT_ARUCO_ORIGINAL"
+    ],
+    "marker_size_mm": null,
+    "marker_size_note": "Not measured. Photo estimate: black square edge = 0.132 x paper height (about 60 mm if the paper is 453 mm tall). Measure it with a ruler and set it here to enable corner-based registration (16 points, partial-occlusion tolerant); null = centres only, all four markers required."
+  },
+  "markers": [
+    {
+      "id": 10,
+      "role": "board_corner",
+      "label": "top_left",
+      "center_uv": [
+        0.065,
+        0.067
+      ],
+      "rotation_deg": 0,
+      "verified": false,
+      "id_and_layout_verified": true,
+      "position_source": "photo_estimate_2026-10-18"
+    },
+    {
+      "id": 11,
+      "role": "board_corner",
+      "label": "top_right",
+      "center_uv": [
+        0.944,
+        0.067
+      ],
+      "rotation_deg": 0,
+      "verified": false,
+      "id_and_layout_verified": true,
+      "position_source": "photo_estimate_2026-10-18"
+    },
+    {
+      "id": 13,
+      "role": "board_corner",
+      "label": "bottom_right",
+      "center_uv": [
+        0.944,
+        0.918
+      ],
+      "rotation_deg": 0,
+      "verified": false,
+      "id_and_layout_verified": true,
+      "position_source": "photo_estimate_2026-10-18 (bottom inset least certain: paper edge cut off at the photo border)"
+    },
+    {
+      "id": 12,
+      "role": "board_corner",
+      "label": "bottom_left",
+      "center_uv": [
+        0.065,
+        0.918
+      ],
+      "rotation_deg": 0,
+      "verified": false,
+      "id_and_layout_verified": true,
+      "position_source": "photo_estimate_2026-10-18 (bottom inset least certain: paper edge cut off at the photo border)"
+    }
+  ],
+  "photo_evidence": {
+    "file": "perception/tests/fixtures/real_board_photo_2026-10-18_upright_1400.jpg",
+    "original": "5712x3213 phone photo supplied by the team on 2026-10-18 in the final landscape orientation (first supplied turned 90 deg)",
+    "detected_in_upright_frame": {
+      "10": {
+        "position": "top_left",
+        "side_px": 412,
+        "pattern_rotation_deg": 0
+      },
+      "11": {
+        "position": "top_right",
+        "side_px": 377,
+        "pattern_rotation_deg": 0
+      },
+      "13": {
+        "position": "bottom_right",
+        "side_px": 451,
+        "pattern_rotation_deg": 0
+      },
+      "12": {
+        "position": "bottom_left",
+        "side_px": 423,
+        "pattern_rotation_deg": 0,
+        "note": "its paper touches the image border; decodes via the padded retry"
+      }
+    },
+    "derived": "Layout TL=10, TR=11, BR=13, BL=12 (the legacy audit's assumed 12/13 order is swapped on the real board); all markers printed upright."
+  },
+  "measured": {
+    "measured_on": null,
+    "measured_by": null,
+    "camera_source": null,
+    "frame_size": null,
+    "reprojection_rms_uv": null,
+    "reprojection_rms_px": null,
+    "detected_ids_all": null,
+    "notes": null
+  }
+}

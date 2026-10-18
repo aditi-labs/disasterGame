@@ -14,10 +14,12 @@ Verified from this checkout on 2026-10-18. This inventory describes checked-in f
 | `backend/world/service.py` | Retained `WorldService`; owns accepted actions, world versions and snapshots |
 | `backend/simulation/reachability.py`, `backend/world/game.py` | Reachability, capacity, unmet need, score and no-response comparison. The UI displays these outputs |
 | `backend/world/session_store.py` | Optional SQLite checkpoint store via `FLOODSHIFT_SESSION`. Default server uses memory with the real bundle; there is no required external database |
+| `perception/board_registration.json` | Incoming Lane B photo evidence: verified IDs/layout/rotation; estimated landscape print dimensions and marker centres, not measured world UV |
+| `perception/tests/fixtures/real_board_photo_2026-10-18_upright_1400.jpg` | Actual team board photo in its final landscape orientation. Photo facts supersede the earlier legacy marker guesses |
 
 The cartography is mapped source geography. Population, site suitability, flood closures, capacity, budget and outcomes are educational assumptions already in the source scenario, not measured demographic or operational flood predictions. The UI creates no replacement records. START places the existing population inputs at their scenario coordinates.
 
-Board coordinates use `(0,0)` at top left, `(1,1)` at bottom right. The manifest's projected CRS is EPSG:32645, with bounds `[336089.89297685644, 3115343.646000852, 338489.89297685644, 3117743.646000852]`. `u=(x-xmin)/(xmax-xmin)`, `v=(ymax-y)/(ymax-ymin)`. Board dimensions are provisionally 420 × 420 mm; verify against the print. The UI uses the scenario aspect ratio, not a new geographic projection.
+World coordinates use `(0,0)` at top left, `(1,1)` at bottom right. The manifest's projected CRS is EPSG:32645, with bounds `[336089.89297685644, 3115343.646000852, 338489.89297685644, 3117743.646000852]`. `u=(x-xmin)/(xmax-xmin)`, `v=(ymax-y)/(ymax-ymin)`. World board dimensions are provisionally 420 × 420 mm. Lane B's photo shows a different landscape print extent, estimated at 594 × 453 mm; those absolute dimensions are unmeasured. Print UV is not world UV. The UI retains the scenario's aspect ratio for screen rehearsal and holds physical projection until shared integration supplies the measured mapping.
 
 The geometry response contains no residential parcel footprints. Its four flood corridors follow mapped waterways near simulated closures; they are explicitly illustrative, not measured inundation boundaries. Danger indicators remain at population points; they do not claim parcel flooding.
 
@@ -31,4 +33,4 @@ The geometry response contains no residential parcel footprints. Its four flood 
 
 The operator separately computes SHA-256 over the exact `/scenario` response bytes and includes it in downloaded run records. That is a geometry-response fingerprint, not a database or complete scenario-bundle fingerprint.
 
-Shared decisions still needed: identify the actual printed map and resolve the spec's Mapbox requirement; provide a second reviewed flood stage; measure the existing board markers. Existing backend additions in `1a1406f` still require shared review. This continuation changes UI, tests and documentation only.
+Shared decisions still needed: resolve the printed-map/Mapbox source and obtain print bounds and the print-to-world transform; provide a second reviewed flood stage; measure marker centres/size and paper dimensions. The photo establishes IDs/layout/rotation, not live calibration. Existing backend additions in `1a1406f` still require shared review. This integration preserves Lane B's source unchanged and changes UI, tests and documentation to consume its verified facts.

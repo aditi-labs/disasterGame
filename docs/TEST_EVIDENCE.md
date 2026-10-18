@@ -1,16 +1,17 @@
 # UI test evidence
 
-Verified on 2026-10-18 against the working tree based on `bfafe19`. Backend, simulation, planning, public Python contracts and scenario data were not edited in this continuation.
+Verified on 2026-10-18 while integrating Sky's UI work with `origin/main` at `cc38a00`. The Master spec, retained backend, simulation, planning, public Python contracts, scenario data and incoming Lane B source are preserved. UI adaptations consume Lane B's nested telemetry and photo-verified marker metadata; no print/world transform is guessed.
 
 | Check | Result |
 | --- | --- |
-| UI regression suite (`cd apps/game; npm.cmd test`) | **62 passed** across 6 files: clock/controller, adapter, reactions, results, homography, palette, rendering, reconnect and snapshot recovery |
+| UI regression suite (`cd apps/game; npm.cmd test`) | **69 passed** across 8 files: prior UI coverage plus nested Lane B telemetry, marker-layout consistency and the physical-projection registration guard |
 | Typecheck / production build | Passed. Vite bundles both routes |
 | Real-time UI integration (`npm.cmd run test:live`) | Passed cleanly: both React routes mounted against an isolated real backend; 75-second mission plus pause and replay; no mocked HTTP/WebSocket endpoints |
-| Launcher | Started backend and Vite on 18012/15181; `/health` healthy; both `/operator` and `/projector` returned HTTP 200. Occupied-port refusal also verified |
+| Launcher / merged dev imports | Initial launcher check passed on 18012/15181, including occupied-port refusal. Merged app rechecked on 18013/15182: both routes, transformed board module and its shared registration JSON import returned HTTP 200 |
 | Retained backend suite | 80 passed, 1 failed: `test_hot_build_is_reproducible_and_preserves_all_crossing_states`, the already-reported baseline byte-reproducibility failure |
 | Browser screenshots / visual layout | **Not run.** Browser runtime reports no available session. HTTP 200 and React rendering do not validate browser pixels |
-| Physical camera / projector / print | **Not run.** No hardware, captures or measured marker registration supplied |
+| Lane B regression suite (`pytest perception/tests -q`) | **62 passed**, including the actual team board photo checks for IDs/layout/rotation. Centre/size estimates remain unmeasured |
+| Physical camera / projector / print | **Not run live here.** A board photo is supplied, but live measured registration and print-to-world alignment remain unavailable |
 
 The live test record is [evidence/ui-live-run.json](evidence/ui-live-run.json). It records timed phase observations, real backend versions/metrics, token sites and WebSocket snapshots. Its execution field explicitly identifies React test rendering; it is not browser or physical demo video. The test launches a fresh ephemeral-port backend so it never resets an existing operator session, and cleans up that process afterward.
 
@@ -33,7 +34,8 @@ The first full React run passed its gameplay assertions but exposed delayed WebS
 | Required evidence | Owner / next action |
 | --- | --- |
 | Canonical printed map / Mapbox reconciliation | Team confirms actual print and source |
-| Actual marker dictionary/IDs/corners and reprojection error | Lane B measures and updates board registration |
+| Actual marker centres/size, paper dimensions and live reprojection error | IDs/layout/rotation verified by incoming photo; Lane B supplies ruler measurements/live calibration |
+| Landscape print UV → square world UV / print bounds | Shared integration supplies a measured transform; physical projection is held until then |
 | Physical placed/moved/lifted lifecycle and tracker reset | Lanes B/C and shared backend agree/implement the current missing contract |
 | Second reviewed flood stage | Data owner adds actual stage data; shared review |
 | Bridge observation → accepted route change video and matching run log | Hardware team rehearses; Sky captures UI evidence |

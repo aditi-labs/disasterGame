@@ -16,6 +16,7 @@ export interface ProjectorHealth {
   calibrating: boolean;
   testing: boolean;
   calibratedAt: string | null;
+  alignmentVerified: boolean;
   seenAt: number;
 }
 
@@ -49,7 +50,7 @@ export function useMission(world: LiveWorld) {
 
   useEffect(() => {
     const onMessage = (m: ChannelMessage) => {
-      if (m.t === "projector-health") setProjector({ overlay: m.overlay, calibrating: m.calibrating, testing: m.testing, calibratedAt: m.calibratedAt, seenAt: Date.now() });
+      if (m.t === "projector-health") setProjector({ overlay: m.overlay, calibrating: m.calibrating, testing: m.testing, calibratedAt: m.calibratedAt, alignmentVerified: m.alignmentVerified, seenAt: Date.now() });
     };
     channel.current = openChannel(onMessage);
     return () => channel.current?.close();

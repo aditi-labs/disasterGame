@@ -556,12 +556,12 @@ function ResultsCard({ results, syncing }: { results: Results; syncing?: boolean
 function TestPattern() {
   const W = BOARD_WIDTH;
   const H = BOARD_HEIGHT;
-  // Reticles sit at 10% insets: well inside the board and clear of every marker keep-out.
+  // Rehearsal reticles are inset beyond the photo-estimated print marker masks.
   const pts: UV[] = [
-    [0.1, 0.1],
-    [0.9, 0.1],
-    [0.9, 0.9],
-    [0.1, 0.9],
+    [0.18, 0.18],
+    [0.82, 0.18],
+    [0.82, 0.82],
+    [0.18, 0.82],
     [0.5, 0.5],
   ];
   return (

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLiveWorld } from "../../live/useLiveWorld";
+import { perceptionView } from "../../live/perceptionStatus";
 import type { TokenType, WorldSnapshot } from "../../types/contracts";
 import { TOKEN_SITE_KIND } from "../../types/contracts";
 import type { ScenarioGeometry } from "../../types/scenario";
-import { MARKER_PROVENANCE, MARKERS_VERIFIED } from "../../game/board";
+import { MARKER_LAYOUT_VERIFIED, MARKER_PROVENANCE, MARKERS_VERIFIED, PRINT_WORLD_ALIGNMENT_NOTE, PRINT_WORLD_ALIGNMENT_VERIFIED } from "../../game/board";
 import { BOUNDARIES_S, MISSION_MS } from "../../game/clock";
 import { BoardSvg } from "../../game/overlays/BoardSvg";
 import { PieceIcon } from "../../game/overlays/glyphs";
@@ -30,10 +31,6 @@ function Status({ label, value, tone, title }: { label: string; value: string; t
 
 const NEED_LABEL = { refuge: "Refuge", medical: "Medical", food: "Food" } as const;
 const KEY_PIECES: Record<string, TokenType> = { "3": "hospital", "4": "food_shelter", "5": "shelter", "6": "bridge" };
-
-function str(v: unknown): string | null {
-  return typeof v === "string" || typeof v === "number" || typeof v === "boolean" ? String(v) : null;
-}
 
 export function OperatorRoute() {
   const world = useLiveWorld({ pollHealth: true });
@@ -92,10 +89,8 @@ export function OperatorRoute() {
   };
 
   const projectorSeen = mission.projector && Date.now() - mission.projector.seenAt < 3000;
-  const projectorValue = !projectorSeen ? "NOT OPEN" : mission.projector!.calibratedAt ? "CALIBRATED" : "UNCALIBRATED";
-  const camera = str(perception?.camera) ?? "not reported";
-  const aruco = str(perception?.calibration) ?? "not reported";
-  const perceptron = health?.perceptron_status ?? "unknown";
+  const projectorValue = !projectorSeen ? "NOT OPEN" : !mission.projector!.overlay ? "SCREEN" : !mission.projector!.alignmentVerified ? "ALIGNMENT REQUIRED" : mission.projector!.calibratedAt ? "CALIBRATED" : "UNCALIBRATED";
+  const telemetry = perceptionView(perception, health?.perceptron_status);
 
   const downloadRun = () => {
     const record = {
@@ -110,7 +105,7 @@ export function OperatorRoute() {
       final_world_version: snapshot?.world_version ?? null,
       final_phase: phase,
       surge: clock.surge,
-      marker_registration: { verified: MARKERS_VERIFIED, provenance: MARKER_PROVENANCE },
+      marker_registration: { verified: MARKERS_VERIFIED, layout_verified_from_photo: MARKER_LAYOUT_VERIFIED, print_world_alignment_verified: PRINT_WORLD_ALIGNMENT_VERIFIED, provenance: MARKER_PROVENANCE },
       events: world.run,
       final_game: snapshot?.game ?? null,
       final_metrics: snapshot?.metrics ?? null,
@@ -132,10 +127,10 @@ export function OperatorRoute() {
         <div className="status-line">
           <Status label="DB/SCENARIO" value={scenario ? `${scenario.scenario_id}${fingerprint ? " · " + fingerprint.slice(0, 8) : ""}` : "UNAVAILABLE"} tone={scenario && !scenarioMismatch ? "ok" : "bad"} title={fingerprint ? `sha256 of GET /scenario: ${fingerprint}` : scenarioError ?? undefined} />
           <Status label="WORLD/WS" value={`${status.toUpperCase()}${snapshot ? ` · v${snapshot.world_version}` : ""}`} tone={connected ? "ok" : status === "connecting" ? "warn" : "bad"} />
-          <Status label="CAMERA" value={camera.toUpperCase()} tone={/connect|ok|live|running/i.test(camera) && !/not/i.test(camera) ? "ok" : "warn"} title="Reported by the perception process via POST /perception/status" />
-          <Status label="ARUCO" value={aruco.toUpperCase()} tone={/^calibrated$/i.test(aruco) ? "ok" : "warn"} title={MARKER_PROVENANCE} />
-          <Status label="PERCEPTRON" value={perceptron.toUpperCase()} tone={/connected|ok|live/i.test(perceptron) && !/not/i.test(perceptron) ? "ok" : "warn"} />
-          <Status label="PROJECTOR" value={projectorValue} tone={projectorValue === "CALIBRATED" ? "ok" : projectorValue === "UNCALIBRATED" ? "warn" : "bad"} />
+          <Status label="CAMERA" value={telemetry.camera.value} tone={telemetry.camera.tone} title="Reported by the perception process via POST /perception/status" />
+          <Status label="ARUCO" value={telemetry.aruco.value} tone={telemetry.aruco.tone} title={MARKER_PROVENANCE} />
+          <Status label="PERCEPTRON" value={telemetry.perceptron.value} tone={telemetry.perceptron.tone} />
+          <Status label="PROJECTOR" value={projectorValue} tone={projectorValue === "CALIBRATED" ? "ok" : projectorValue === "NOT OPEN" ? "bad" : "warn"} />
         </div>
         <a className="op-link" href="/projector" target="floodshift-projector">
           open /projector ↗
@@ -153,7 +148,8 @@ export function OperatorRoute() {
       {liveData && (scenario?.stage_count ?? 0) < 3 && (
         <div className="banner banner-warn">This scenario has one flood stage, activated at START. The 50-second surge will report FLOOD UPDATE UNAVAILABLE until the data owner supplies a second stage.</div>
       )}
-      {!MARKERS_VERIFIED && <div className="banner banner-warn">ArUco keep-outs use {MARKER_PROVENANCE}. Lane B must confirm ids/positions on the physical board (docs/BOARD_REGISTRATION.md).</div>}
+      {!MARKERS_VERIFIED && <div className="banner banner-warn">ArUco: {MARKER_PROVENANCE}. Lane B still needs ruler measurements and a live reprojection check (docs/BOARD_REGISTRATION.md).</div>}
+      {!PRINT_WORLD_ALIGNMENT_VERIFIED && <div className="banner banner-warn">{PRINT_WORLD_ALIGNMENT_NOTE}</div>}
 
       <main className="op-grid">
         <section className="card op-mission">
@@ -600,21 +596,19 @@ function Detection({ world }: { world: ReturnType<typeof useLiveWorld> }) {
 }
 
 function CameraCalibration({ world }: { world: ReturnType<typeof useLiveWorld> }) {
-  const p = world.perception ?? {};
-  const ids = p.marker_ids ?? p.markers ?? p.corners_found;
-  const err = p.reprojection_error ?? p.reprojection_error_px ?? p.error_estimate_mm;
+  const telemetry = perceptionView(world.perception, world.health?.perceptron_status);
   return (
     <div className="camera-cal">
       <p>
         Camera calibration runs in the lane B perception service, which reports here through <code>POST /perception/status</code>. This UI shows what it reports and never simulates a transform.
       </p>
       <ul>
-        <li>camera: <b>{str(p.camera) ?? "not reported"}</b></li>
-        <li>calibration: <b>{str(p.calibration) ?? "not reported"}</b></li>
-        <li>detected marker ids: <b>{ids != null ? JSON.stringify(ids) : "not reported"}</b></li>
-        <li>reprojection quality: <b>{err != null ? String(err) : "not reported"}</b></li>
+        <li>camera: <b>{telemetry.camera.value}</b> · {telemetry.cameraSource ?? "source not reported"} · fps {telemetry.fps ?? "not reported"} · frame age {telemetry.frameAgeMs ?? "not reported"} ms</li>
+        <li>calibration: <b>{telemetry.aruco.value}</b> · {telemetry.registrationStatus ?? "measurement status not reported"}</li>
+        <li>detected marker ids: <b>{telemetry.markerIds != null ? JSON.stringify(telemetry.markerIds) : "not reported"}</b></li>
+        <li>reprojection RMS: <b>{telemetry.rmsUv != null ? String(telemetry.rmsUv) + " UV" : "UV not reported"} / {telemetry.rmsPx != null ? String(telemetry.rmsPx) + " px" : "px not reported"}</b></li>
       </ul>
-      {str(p.calibration) !== "calibrated" && <p className="notice">Automated placement must stay blocked until the perception service reports a valid ArUco calibration.</p>}
+      {!telemetry.registrationReady && <p className="notice">Automated placement must stay blocked until the perception service reports a valid measured ArUco calibration. Its print UV still requires a reviewed transform into world UV.</p>}
     </div>
   );
 }

@@ -1,51 +1,126 @@
-# Board registration
+# Board registration: real ArUco IDs and measured board positions
 
-Status on 2026-10-18: software transform and provisional masks implemented; **physical registration unverified**. No board photo, camera feed, marker measurements or projector is available in this workspace.
+Owner: Detection Dev 1 (Lane B). Source of truth for values: the **physical board** under the
+**actual camera**, measured with `python -m perception.service --calibrate`. Spec references:
+FLOODSHIFT_MASTER_BUILD_SPEC section 2 (retain existing markers), 6.2–6.4, 8 (asset inventory),
+10 (no fake data).
 
-The checked-in board is the square HOT/OSM geometry from `nepal_rasuwa_hot_v1`. Its 420 × 420 mm dimensions are explicitly provisional. The spec names Mapbox as canonical, but this checkout has no Mapbox implementation. Match the actual print to the source before accepting alignment; do not calibrate one map against another.
+## Current status: IDs and layout verified from a photo; positions still unmeasured
 
-| Item | Current value | Confidence |
-| --- | --- | --- |
-| Board UV | Top-left origin; u right, v down | Verified in source |
-| Projector transform | Affine translation, rotation, independent scale, plus 4-corner homography | Unit tested; not physically measured |
-| ArUco dictionary | Legacy `DICT_4X4_100` reference | Unverified on current board |
-| Marker IDs / centers | 10 at `(0.04,0.04)`, 11 at `(0.96,0.04)`, 12 at `(0.96,0.96)`, 13 at `(0.04,0.96)` | Legacy guesses, not observed markers |
-| Keep-out half size | 0.045 UV | Provisional; needs actual marker bounds and quiet zone |
-| Calibration storage | Projector browser local storage, key `floodshift.game.projector.calibration.v2` | Software behavior only |
+On 2026-10-18 the team supplied a phone photo of the real printed map with its markers
+(`perception/tests/fixtures/real_board_photo_2026-10-18_upright_1400.jpg`, final landscape orientation). Running the
+perception detector on it verified the first four rows below; the rest are estimates
+from that single perspective photo and still need a ruler.
 
-`apps/game/src/game/board.ts` sets `MARKERS_VERIFIED=false`. Black masks are drawn last in physical-overlay mode, after floods, routes, results and registration patterns. They reduce light at provisional positions but cannot guarantee the real tags remain clear until measured. Screen mode draws only provisional marker guides. Pressing Enter records operator confirmation time; it is not an automatic measurement or validation of ArUco registration.
+| Item | Value in `perception/board_registration.json` | Verified on the physical board? | Source |
+|---|---|---|---|
+| Dictionary | 4X4 family; `DICT_4X4_50` configured (all 4X4 dictionaries decode these IDs) | **Yes** | Photo 2026-10-18, detector scan over every OpenCV dictionary |
+| Marker IDs | 10, 11, 12, 13 | **Yes** | Photo; ID 12 (bottom-left) decodes only with the padded-frame retry because its paper touched the image border |
+| Corner layout (upright map) | TL = 10, TR = 11, **BR = 13, BL = 12** | **Yes** | Photo. The legacy audit assumed BR = 12, BL = 13: the real board has them swapped |
+| Printed rotation | 0 deg for all four in the upright frame | **Yes** | Photo: all four patterns share one rotation, equal to the map text's rotation |
+| Upright frame | the team's final landscape orientation: labels readable, river enters from the top; u right, v down, origin paper top-left | **Yes** (orientation) | Photo as supplied; river/confluence shape matches the scenario's board-UV data orientation |
+| Marker centres (UV) | 10 (0.065, 0.067), 11 (0.944, 0.067), 13 (0.944, 0.918), 12 (0.065, 0.918) | **No, photo estimate** | Rectified photo; the bottom inset is least certain (paper edge cut off at the photo border) |
+| Marker edge length | `null`; estimate 0.132 x paper height (~60 mm if the paper is 453 mm tall) | **No** | Rectified photo; set it after measuring to enable corner-based registration |
+| Board (paper) size | 594 x 453 mm **assumed** (aspect 0.763 measured, absolute size not) | **No** | The print is landscape; A-series width assumed only to give mm gates a scale |
+| Reprojection error | not measured live | – | – |
 
-Use this sequence on hardware:
+**Cross-lane flag (shared integration / Sky):** the physical print is landscape (height about
+0.76 of width) while `scenarios/nepal_rasuwa_hot_v1/data/scenario.json` describes a 420 x 420
+square board frame, and the print's visible extent differs from the square export (the main
+river leaves the print at the right edge, not the bottom-right corner). Perception reports
+UV in the **print** frame defined above. The transform print-UV -> world `board_uv` / geo is
+owned by the shared lane and is **not** the identity; it should come from the Mapbox print
+bounds, not from stretching the square frame onto the paper.
 
-1. Identify the printed map asset, board dimensions and orientation. Record the physical print/source hash and a photo.
-2. Lane B measures actual dictionary, marker IDs, four marker corners in board UV, orientation and reprojection error from the real camera. Record them here; update `board.ts` masks and provenance together. Set verification true only after measurement/review.
-3. Open `/projector` in a second window of the operator's browser; move it to the projector output. Press `F` there for fullscreen. Use `M` to select overlay mode so printed cartography carries the basemap.
-4. Clear the physical tray and marker quiet zones. Click TEST PROJECTOR or press `T` for outlines/reticles. Press `C` to calibrate.
-5. Align the projected map against several actual road intersections and crossings, not just the outer corners. Enter saves confirmation; `C` closes tools. Test mode toggles separately; use the operator's close-tools control to close both.
-6. Measure residual error at center, corners and all actionable crossings. Re-check after moving either camera or projector. Test actual pieces with projection on; record classifier false positives and marker stability.
+Until the measured table below is filled from a live `--calibrate`, the service prints
+`registration NOT VERIFIED ON BOARD` in its status and the operator status line.
 
-| Calibration key | Effect |
-| --- | --- |
-| Arrow keys | Translate whole image, or selected corner, 1 px |
-| Shift + adjustment | 10× step |
-| `[` / `]` | Rotate by 0.1° |
-| `-` / `=` | Uniform scale |
-| `,` / `.` | Horizontal scale |
-| `;` / `'` | Vertical scale |
-| `1`–`4` | Select TL, TR, BR, BL corner |
-| `5` | Return to whole-image adjustment |
-| `0` | Reset calibration |
-| Enter | Record calibration confirmation |
-| `C` | Toggle calibration panel |
+## How to measure (15 minutes, at the venue, projector off then on)
 
-Record actual values below after the hardware session. Blank means unmeasured.
+1. Mount the camera in its final position. Start DroidCam (or the webcam). Find it:
+   ```
+   .venv/bin/python -m perception.service --list-cameras
+   ```
+   DroidCam with no virtual-camera driver: use `--source http://<phone-ip>:4747/video`.
+2. Hold the map upright (labels readable, river entering from the top). Measure with a ruler,
+   in millimetres: the paper width and height, the centre of each black marker square from
+   the paper's top-left corner, and the edge length of the black square. Convert centres to
+   UV by dividing x by the paper width and y by the paper height. Keep all four markers at
+   least a marker's width away from the camera frame edge.
+3. Run the calibrate flow with the measured values. Example with made-up placeholders that
+   **must be replaced by your ruler readings**:
+   ```
+   .venv/bin/python -m perception.service --calibrate \
+     --marker-size-mm <edge_mm> \
+     --marker 10:<u>:<v> --marker 11:<u>:<v> --marker 12:<u>:<v> --marker 13:<u>:<v> \
+     --measured-by "<name>"
+   ```
+   The window lists every dictionary that finds markers and the IDs each finds. If the
+   configured dictionary finds nothing but another one does, the board was printed with that
+   family: pass `--config` with `"board": {...}` or edit `aruco.dictionary` and re-run. If the IDs
+   on the board are not 10–13, add `--marker <id>:<u>:<v>` for the real IDs and remove the
+   stale ones from the JSON.
+4. Press `O` to solve each marker's printed rotation, then `W` to write. The file is rewritten
+   with `status: MEASURED`, `verified: true` for every marker used, and a `measured` block
+   (date, camera source, frame size, RMS error in UV and px, per-marker RMS, detected IDs).
+5. Copy the `measured` block into the table below, and record a 20-second empty-board
+   recording for regression: `--record assets/live_captures/<date>_empty_board`.
+6. Repeat the RMS check with the projector on (idle title screen) and note any difference.
 
-| Measurement | Result |
-| --- | --- |
-| Printed asset/hash, dimensions | Pending team confirmation |
-| Camera/device, resolution, lens correction | Pending lane B |
-| Dictionary/IDs, measured board corners, orientation | Pending lane B |
-| Camera reprojection error | Not measured |
-| Projector resolution/transform, board alignment error | Not measured |
-| Marker occlusion tolerance with projector on | Not measured |
-| Classifier false positives with projector on | Not measured |
+Acceptance (spec 5/6): RMS reprojection error well under the pad tolerance of 0.025 UV
+(10.5 mm). Target under 0.005 UV (about 2 mm). With `marker_size_mm` set, registration
+survives one or two occluded markers; without it all four must stay visible.
+
+## Measured values (fill from the written `measured` block; do not type values by hand)
+
+| Field | Value |
+|---|---|
+| measured_on | – |
+| measured_by | – |
+| camera_source | – |
+| frame_size | – |
+| dictionary | – |
+| marker IDs used | – |
+| marker_size_mm | – |
+| reprojection_rms_uv / px | – |
+| per-marker RMS (uv) | – |
+| detected_ids_all (including non-board IDs) | – |
+| projector on: RMS | – |
+| recording path | – |
+
+## Rules
+
+- Board markers are calibration references, never playable objects. The service dilates their
+  footprints by 6 mm and excludes them from candidate detection.
+- The camera-to-board homography is separate from the projector-to-board transform (UI lane).
+- A registration file with `status: UNVERIFIED_TENTATIVE` must never be reported as calibrated to judges.
+
+## Projector integration (Sky)
+
+The UI imports marker metadata from `perception/board_registration.json` so it uses the
+photo-verified corner order and does not maintain a conflicting legacy table.
+`MARKERS_VERIFIED` remains false until ruler measurements are written. The UI distinguishes
+a valid camera homography from a measured registration; held/degraded/unmeasured poses
+never receive a green CALIBRATED badge.
+
+**Physical projection is held at BOARD REGISTRATION REQUIRED.** The print/world mismatch
+described above has no measured transform yet. Projector keystone adjusts output pixels;
+it cannot invent the missing geospatial mapping. Press `M` or open
+`/projector?mode=screen` to rehearse on the square source map. Screen rehearsal is not
+physical alignment evidence. Calibration/test reticles stay off the physical overlay while
+this mismatch is unresolved, and Enter cannot cause projector health to claim CALIBRATED.
+
+After shared integration supplies a measured print-UV/world-UV transform and matching
+print bounds, apply it to geometry, routes, physical observations and marker masks in the
+correct frames before enabling physical projection. Preserve the source square scenario;
+do not stretch it to the photographed paper aspect. Then run projector alignment and
+projector-on camera checks against the actual print.
+
+The existing projector pixel controls remain: `F` fullscreen; `M` screen/overlay;
+`C` calibration; `T` test reticles; arrows translate; `[`/`]` rotate;
+`-`/`=` uniform scale; `,`/`.` x scale; `;`/`'` y scale;
+`1`–`4` select TL/TR/BR/BL corner; `5` whole image; Shift multiplies the step by ten;
+`0` resets; Enter stores the local pixel adjustment. That local timestamp is not a
+measurement of board registration or the print/world transform.
+
+UI verification and known gaps are recorded in [TEST_EVIDENCE](TEST_EVIDENCE.md).

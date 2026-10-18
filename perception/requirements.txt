@@ -1,0 +1,5 @@
+# FloodShift perception service (Lane B, Detection Dev 1)
+# Install into the project venv:  python -m venv .venv && .venv/bin/pip install -r perception/requirements.txt
+opencv-contrib-python>=4.13,<5
+numpy>=2.0
+pytest>=8.0

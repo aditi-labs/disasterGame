@@ -229,3 +229,8 @@ assets/live_captures/
 .runtime/
 .env.local
 .env.*.local
+
+# FloodShift perception (Dev 1)
+runs/
+*.jsonl
+.DS_Store
