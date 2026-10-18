@@ -3,7 +3,8 @@
 # Install with: pip install -r requirements.txt
 
 # Core CV
-opencv-python>=4.8.0
+# contrib build: the perception service needs cv2.aruco; installing plain opencv-python on top of it corrupts cv2
+opencv-contrib-python>=4.13,<5
 numpy>=1.24.0
 
 # Perceptron SDK (official)
