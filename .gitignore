@@ -218,3 +218,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# disasterGame
+.venv/
+node_modules/
+apps/game/dist/
+*.tsbuildinfo
+.env
+assets/live_captures/
