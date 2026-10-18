@@ -10,7 +10,7 @@ The SDK may return a class without numeric confidence. The adapter preserves `No
 
 ## Measure the board and map
 
-1. Use [BOARD_REGISTRATION](BOARD_REGISTRATION.md) to measure the actual paper, marker size/centres and camera reprojection. Run `.venv/Scripts/python.exe -m perception.service --source auto --calibrate`. The checked-in estimates are not measurements.
+1. The board is `nepalmap.png` printed full-bleed at 24 × 18 in. `scripts/register_print_artwork.py` measures print→world by fitting the scenario's OSM rivers and roads onto the artwork (split-half stability ≤ 0.001 print UV) and measures the marker centres by registering the board photo to the artwork. Re-run it, or `perception.service --calibrate`, if the markers move. See [BOARD_REGISTRATION](BOARD_REGISTRATION.md).
 2. Collect at least six corresponding landmarks on the real print and the source map: four widely separated, non-collinear points to fit, followed by two or more independent points to check. Each entry in a JSON array needs `label`, `print_uv` and `world_uv`, with two measured normalized coordinates per UV. Print UV includes the paper margins; world UV uses the scenario extent. Use actual river/road landmarks, not a stretched screenshot or guessed service-pad locations.
 3. Save those real pairs in a local file, then fit:
 
@@ -47,7 +47,7 @@ Capture the empty-board reference with no pieces present. Keep pieces in the tra
 - Camera HTTP feedback is queued and applied on the camera processing thread. Backend reset changes `world_epoch`; status feedback clears camera tracks/bindings on the next frame. Delayed events from an old epoch are rejected. Restarting the detector mid-run requires resetting the game so stale identities cannot become new tokens.
 - START completes digital START and existing population setup, then opens a backend input run. Pause/resume is acknowledged by the backend. Manual corrections remain available while paused before 70 seconds.
 - Backend monotonic time rejects physical input after 70 seconds even if the operator misses the close callback. Closing input and reading the final snapshot happen under the mutation lock. The projector and run export use that captured snapshot. The narrative clock ends at 75 seconds.
-- At 50 seconds the UI requests a stage advance once. The current data still has only one flooded stage and returns `last_stage`; no extra inundation is invented.
+- At 50 seconds the UI requests a stage advance once. The HOT bundle's illustrative stage 2 floods the hillside road between the refuge and field-care pads; bundles without a further stage still return `last_stage`.
 
 ## Acceptance on hardware
 

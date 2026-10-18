@@ -1,4 +1,5 @@
 """Controlled observation inputs against the real reducer; not live-camera evidence."""
+import json
 import time
 import uuid
 
@@ -133,11 +134,25 @@ def test_websocket_carries_backend_rejection_and_accepted_snapshot(api):
         assert snapshot["type"] == "world.snapshot" and snapshot["payload"]["world_version"] == result["world_version"]
 
 
-def test_homography_roundtrip_and_unmeasured_repository_stays_locked():
+def test_homography_roundtrip_and_artwork_registration_covers_every_map_site():
     m = [1.1, .1, -.05, .03, .8, .1, .02, -.04, 1]
     assert transform(inverse(m), transform(m, [.32, .67])) == pytest.approx([.32, .67])
     reg = load_registration(main.REPO_ROOT / "perception/board_mapping.json", main.REPO_ROOT / "perception/board_registration.json", "nepal_rasuwa_hot_v1")
-    assert not reg["ready"]
+    assert reg["ready"] and reg["mapping_ready"]
+    mapping = json.loads((main.REPO_ROOT / "perception/board_mapping.json").read_text())
+    assert mapping["validation"]["split_half_site_disagreement_max_print_uv"] <= .01
+    sites = json.loads((main.REPO_ROOT / "scenarios/nepal_rasuwa_hot_v1/data/sites.json").read_text())
+    for site in sites:
+        if site["kind"] != "control_start_pad":
+            assert all(0 < n < 1 for n in transform(reg["world_to_print"], site["board_uv"])), site["id"]
+
+
+def test_projector_mapping_survives_unmeasured_markers(tmp_path):
+    markers = json.loads((main.REPO_ROOT / "perception/board_registration.json").read_text())
+    markers["status"] = "UNVERIFIED_TENTATIVE"
+    (tmp_path / "markers.json").write_text(json.dumps(markers))
+    reg = load_registration(main.REPO_ROOT / "perception/board_mapping.json", tmp_path / "markers.json", "nepal_rasuwa_hot_v1")
+    assert reg["mapping_ready"] and reg["world_to_print"] and not reg["ready"]
 
 
 def test_mapping_fitter_checks_independent_measured_landmarks():

@@ -12,10 +12,10 @@ START leads directly into gameplay; the seven-frame artwork prologue and old int
 
 | Mission time | Operator/player action | Expected truthful output |
 | --- | --- | --- |
-| 0–10 s | Orient the player | Warning, actual stage-1 closure state, population point cues |
-| 10–30 s | Place bridge on a lit crossing; manual fallback can select/click a real pad | Accepted token halo; only real reachability/route changes glow mint. East crossing restores access in this scenario; other crossings can be accepted without improving access |
-| 30–50 s | Place shelter or hospital; food optional | Actual facility capacity and returned service paths; unmet needs may remain after placement |
-| 50–70 s | Respond with remaining pieces or move/remove | Exactly one timed advance request. Current bundle rejects `last_stage`; map remains at the accepted stage and reports unavailable |
+| 0–10 s | Orient the player (Chapter I) | Stage-1 flood, the cut-off village (named from the scenario) glows red, its lifeline pulses red. At 8 s MISSION 1 appears and the backend-selected crossing glows |
+| 10–30 s | Place the bridge on the glowing crossing (Chapter II); laptop fallback button if the camera misses it | Only the crossing the ghost planner says reconnects people is highlighted. On acceptance: bridge outline glows, the lifeline turns green, residents walk toward help, CROSSING RESTORED — ACCESS IMPROVED. A wrong crossing is accepted but the guide asks to move it there. At 18 s without a restored crossing the UI asks `/plan/suggest` (goal `access`) once: Matsya's Guidance appears only if the backend returns a ghost |
+| 30–50 s | Choose ONE service (Chapter III): hospital or food station (shelter only with `VITE_SHELTER_PIECE=1`) | Each glowing site shows the reducer-previewed gain. Routes light up from the actual returned service paths; moving a piece shows MOVE CONFIRMED and recalculates |
+| 50–70 s | Respond with remaining pieces (Chapter IV) | Exactly one timed advance to stage 2: the hillside road between the refuge and field-care pads floods (illustrative). A hospital there is cut off; the guide highlights the best remaining recognised piece the backend previews, or HOLD THE LINE |
 | 70–75 s | Stop moving pieces | UI and backend physical input close. Closing under the mutation lock captures one final snapshot for both windows |
 | 75 s onward | Discuss outcome; DOWNLOAD RUN RECORD | Clock finishes; results remain. START begins another run, or technical REPLAY resets to ready |
 

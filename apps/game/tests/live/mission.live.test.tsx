@@ -4,7 +4,7 @@ import { createServer } from "node:net";
 import { resolve } from "node:path";
 import { act, create } from "react-test-renderer";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { BoardSvg } from "../../src/game/overlays/BoardSvg";
+import { ProjectionScene } from "../../src/game/overlays/ProjectionScene";
 import { PIECE_NAME } from "../../src/game/story";
 import { buildResults } from "../../src/game/results";
 import { StartScreen } from "../../src/routes/operator/StartScreen";
@@ -25,12 +25,12 @@ const frames: any[] = [];
 const actions: any[] = [];
 
 const text = (node: any): string => typeof node === "string" || typeof node === "number" ? String(node) : node?.children?.map(text).join("") ?? "";
-const board = () => operator.root.findByType(BoardSvg).props;
-const projected = () => projector.root.findByType(BoardSvg).props;
+const board = () => operator.root.findByType(ProjectionScene).props;
+const projected = () => projector.root.findByType(ProjectionScene).props;
 async function until(check: () => boolean, timeout = 6000) {
   const end = Date.now() + timeout;
   while (!check()) {
-    if (Date.now() > end) throw new Error(`Timed out waiting for live UI. Backend: ${backendLog.slice(-2000)}`);
+    if (Date.now() > end) throw new Error(`Timed out waiting for live UI. UI: ${text(operator?.toJSON()).slice(0, 1500)} Backend: ${backendLog.slice(-1500)}`);
     await act(async () => { await delay(100); });
   }
 }
@@ -94,7 +94,7 @@ beforeAll(async () => {
   const { OperatorRoute } = await import("../../src/routes/operator/OperatorRoute");
   const { ProjectorRoute } = await import("../../src/routes/projector/ProjectorRoute");
   await act(async () => { operator = create(<OperatorRoute />); projector = create(<ProjectorRoute />); });
-  await until(() => operator.root.findAllByType(StartScreen).length > 0 && projector.root.findAllByType(BoardSvg).length > 0 && !!projected().snapshot);
+  await until(() => operator.root.findAllByType(StartScreen).length > 0 && projector.root.findAllByType(ProjectionScene).length > 0 && !!projected().snapshot);
 });
 
 afterAll(async () => {
@@ -103,7 +103,7 @@ afterAll(async () => {
   vi.unstubAllGlobals(); vi.unstubAllEnvs();
 });
 
-it("plays both UI screens for 75 real seconds, including correction, surge failure and replay", async () => {
+it("plays both UI screens for 75 real seconds, including correction, the surge stage and replay", async () => {
   const wire = new WebSocket(baseUrl.replace("http", "ws") + "/ws");
   wire.addEventListener("message", event => {
     try { const m = JSON.parse(String(event.data)); if (m.type === "world.snapshot") actions.push({ at: new Date().toISOString(), version: m.payload.world_version, phase: m.payload.phase, stage: m.payload.simulation_stage }); } catch { /* pong */ }
@@ -172,13 +172,14 @@ it("plays both UI screens for 75 real seconds, including correction, surge failu
     }
     await until(() => projected().snapshot.world_version === board().snapshot.world_version);
     capture("relief_services_accepted");
-    await until(() => board().clock.phase === "SURGE" && board().clock.surge === "failed", 25000);
-    expect(board().snapshot.simulation_stage).toBe(1);
-    expect(board().clock.surgeReason).toBe("last_stage");
-    expect(text(projector.toJSON())).toContain("FLOOD UPDATE UNAVAILABLE");
+    await until(() => board().clock.phase === "SURGE" && board().clock.surge === "accepted", 25000);
+    await until(() => board().snapshot.simulation_stage === 2 && projected().snapshot.simulation_stage === 2);
+    expect(board().snapshot.edges.find((e: any) => e.id === "road-7cae6a171bef").blocked).toBe(true);
+    expect(projected().guide.story).toBe("One of the evacuation roads is now impassable.");
+    expect(text(projector.toJSON())).toContain("CHAPTER IV");
     const surgeLog = operator.root.findAllByType("li").filter(li => text(li).includes("[game_clock] advance_stage"));
     expect(surgeLog).toHaveLength(1);
-    capture("surge_50s_truthful_last_stage_failure");
+    capture("surge_50s_stage_2_accepted");
     await until(() => board().clock.phase === "RESULTS", 25000);
     expect(operator.root.findAllByType("button").find(b => text(b) === "PLACE")!.props.disabled).toBe(true);
     await until(() => projected().clock.phase === "RESULTS" && !projected().resultsSyncing);
@@ -196,7 +197,7 @@ it("plays both UI screens for 75 real seconds, including correction, surge failu
     const evidence = { kind: "floodshift.ui.live-test", verified_at: new Date().toISOString(), scenario_id: final.scenario_id,
       execution: "React test renderer + real HTTP/WebSocket/BroadcastChannel + real monotonic 75-second clock; controlled PhysicalObservation inputs and test calibration, not live detections",
       browser_visual_check: "NOT RUN: no browser session available", physical_board_check: "NOT RUN",
-      assertions: ["both routes mounted", "START-only laptop view", "operator tools preserve clock", "digital START and two population records", "pause/resume acknowledges backend input gate", "controlled physical pending/place/move/remove reaches projector", "manual correction and duplicate rejection", "three facilities accepted", "one timed surge rejected last_stage", "backend physical input closed and final state captured at 70s", "finished at 75s", "backend-derived results", "replay clears world and epoch"],
+      assertions: ["both routes mounted", "START-only laptop view", "operator tools preserve clock", "digital START and two population records", "pause/resume acknowledges backend input gate", "controlled physical pending/place/move/remove reaches projector", "manual correction and duplicate rejection", "three facilities accepted", "one timed surge accepted: stage 2 closes the hillside road", "backend physical input closed and final state captured at 70s", "finished at 75s", "backend-derived results", "replay clears world and epoch"],
       frames, websocket_snapshots: actions, final_results: results };
     const folder = resolve(root, "docs/evidence");
     mkdirSync(folder, { recursive: true });

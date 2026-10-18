@@ -3,7 +3,9 @@ from backend.simulation.reachability import measure
 from backend.world.rules import RuleError, reduce_action
 
 GOALS = {'needs_served': ('food', 'medical', 'refuge'), 'food': ('food',),
-         'medical': ('medical',), 'refuge': ('refuge',)}
+         'medical': ('medical',), 'refuge': ('refuge',),
+         # Reconnect cut-off communities to the supply depot (Matsya's Guidance, Mission 1).
+         'access': ()}
 
 
 def eligible_interventions(bundle, state, goal='needs_served'):
@@ -25,10 +27,12 @@ def eligible_interventions(bundle, state, goal='needs_served'):
         # Draw the first restored service path that actually uses this crossing.
         preview_route = next((r['edge_ids'] for r in measured['service_routes']
                               if r['reachable'] and site['edge_id'] in r['edge_ids']), [])
-        gain = sum(baseline['unmet_' + n + '_model'] - after['unmet_' + n + '_model'] for n in GOALS[goal])
+        gain = (after.get('reachable_communities', 0) - baseline.get('reachable_communities', 0) if goal == 'access'
+                else sum(baseline['unmet_' + n + '_model'] - after['unmet_' + n + '_model'] for n in GOALS[goal]))
         candidates.append({'token_type': 'bridge', 'site_id': site['id'],
                            'board_uv': site['board_uv'], 'rotation_deg': site.get('rotation_deg', 0),
-                           'reason_code': 'improves_multi_service_access' if gain > 0 else 'no_current_need_gain',
+                           'reason_code': ('reconnects_community' if goal == 'access' else 'improves_multi_service_access')
+                                          if gain > 0 else 'no_current_need_gain',
                            'gain_model': gain, 'preview_edge_ids': preview_route, 'resource_cost': site['resource_cost'],
                            'score': gain * 10 - site['resource_cost'], 'projected_metrics': after})
     return sorted(candidates, key=lambda c: (-c['score'], c['site_id']))

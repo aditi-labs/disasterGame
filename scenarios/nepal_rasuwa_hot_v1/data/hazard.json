@@ -6,6 +6,17 @@
       "crossing_east_road",
       "crossing_south_road",
       "crossing_west_road"
+    ],
+    [
+      "crossing_east_road",
+      "crossing_south_road",
+      "crossing_west_road",
+      "road-7cae6a171bef"
     ]
+  ],
+  "stage_notes": [
+    "dry",
+    "flash flood closes the three mapped crossings (illustrative)",
+    "surge: the hillside road between the refuge and field-care pads floods (illustrative)"
   ]
 }

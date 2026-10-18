@@ -1,10 +1,49 @@
 {
   "schema": "floodshift.print_world_mapping.v1",
-  "status": "UNMEASURED",
+  "status": "MEASURED",
   "scenario_id": "nepal_rasuwa_hot_v1",
-  "print_to_world": null,
-  "measured_by": null,
-  "measured_on": null,
-  "source": null,
-  "note": "Supply the measured row-major 3x3 homography from normalized print UV to scenario world UV. Do not use identity or stretch the square map to fit the landscape print. Both this file and board_registration.json must be measured."
+  "print_to_world": [
+    0.7698784611958958,
+    -0.009125835969853092,
+    0.013059484298177075,
+    0.013371335149698377,
+    0.6337671291658598,
+    0.16441478128736667,
+    0.0,
+    0.0,
+    1.0
+  ],
+  "measured_by": "Claude (artwork registration for skylynxf1)",
+  "measured_on": "2026-10-18T14:20:41.365989+00:00",
+  "source": "nepalmap.png: the exact artwork printed full-bleed on the board (24 x 18 in)",
+  "method": "scripts/register_print_artwork.py: affine chamfer fit of scenario OSM rivers and major roads onto the artwork's river/road pixels",
+  "artwork_px": [
+    1448,
+    1086
+  ],
+  "validation": {
+    "river": {
+      "median_px": 0.0,
+      "p75_px": 0.0,
+      "points": 1293
+    },
+    "road": {
+      "median_px": 2.196899890899658,
+      "p75_px": 15.181398391723633,
+      "points": 4677
+    },
+    "held_out_features": {
+      "a_on_b_road": {
+        "median_px": 2.196899890899658,
+        "p75_px": 16.181398391723633,
+        "points": 2319
+      },
+      "b_on_a_road": {
+        "median_px": 2.196899890899658,
+        "p75_px": 14.890698432922363,
+        "points": 2359
+      }
+    },
+    "split_half_site_disagreement_max_print_uv": 0.0008104566415619624
+  }
 }

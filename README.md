@@ -48,7 +48,7 @@ Set-Location apps/game
 npm.cmd test
 npm.cmd run typecheck
 npm.cmd run build
-# Export BoardSvg using backend-generated snapshots:
+# Export ProjectionScene renders of every chapter using backend-generated snapshots:
 npm.cmd run render:projector
 # Optional real-time integration run; starts its own temporary backend:
 npm.cmd run test:live
@@ -61,6 +61,8 @@ Set-Location ../..
 
 The live test drives both React screens for 75 seconds with real HTTP/WebSocket actions, controlled physical observations and test-only calibration. It records evidence under `docs/evidence`; it is not a live detection test. [Projector previews](docs/evidence/projector/manifest.json) are actual SVG component renders: [before the crossing](docs/evidence/projector/crossing-before.png), [after the crossing](docs/evidence/projector/crossing-after.png), and [results](docs/evidence/projector/results.png). These checks do not establish browser layout, classifier accuracy or physical alignment.
 
-Current constraints: the checked-in cartography is HOT/OSM SVG geometry; Mapbox assets are absent. Lane B's real photo verifies marker IDs and corner order (TL 10, TR 11, BR 13, BL 12); marker centres/paper size still need measurement, and landscape print UV must be mapped to world UV before physical projection or observation actions. START activates the bundle's only flooded stage, so the 50-second advance correctly reports `FLOOD UPDATE UNAVAILABLE` / `last_stage`. A second stage must come from the data owner. UI colors avoid the legacy bridge HSV filter; the new classifier still needs projector-on testing.
+Gameplay (white projection, Manu and Matsya framing): I The Warning (0–10 s; Mission 1 revealed at 8 s) · II The Crossing (bridge) · III The Refuge (choose hospital or food station) · IV The Surge (stage 2 floods the hillside road) · V The New Dawn (before/after reveal of the no-response baseline vs. the players' network, impact numbers, Boat of Hope card). Matsya's Guidance reuses `/plan/suggest` (goal `access`); the Boat of Hope lanterns brighten only from measured improvement and can be hidden with `N` on the projector (or `?narrative=0`). The projector is laid out in print space using the measured print↔world mapping from `scripts/register_print_artwork.py`; press `C` on the projector to project the artwork and keystone it onto the paper. Shelter is hidden from the guide until `VITE_SHELTER_PIECE=1` (no recognition reference exists yet).
+
+Current constraints: the checked-in cartography is HOT/OSM SVG geometry; Mapbox assets are absent. Marker centres are measured from the board photo registered to the artwork; re-run the registration if markers move. Stage 2 is an illustrative closure, like stage 1. UI colors (including Matsya's amber) avoid the legacy bridge HSV filter; the classifier still needs projector-on testing under white light.
 
 Read [physical setup](docs/PHYSICAL_INTEGRATION.md), [integration contract](docs/INTEGRATION_CONTRACT.md), [board registration](docs/BOARD_REGISTRATION.md), [operator run of show](docs/RUN_OF_SHOW.md), and [test evidence](docs/TEST_EVIDENCE.md) before hardware rehearsal. World rules, scenario data, simulation and scoring are preserved. Integration adds gateway endpoints and connects the detection service to them.

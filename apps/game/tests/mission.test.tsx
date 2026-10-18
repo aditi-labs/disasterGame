@@ -37,6 +37,23 @@ describe("operator mission controller", () => {
     await act(async () => { await mission.startGame(); });
     expect(world.reset).toHaveBeenCalledOnce();
   });
+  it("asks the backend ghost planner for Matsya's Guidance once, 8 s into Mission 1", async () => {
+    world.snapshot = fixture.states.game_start;
+    await act(async () => { await mission.startGame(); });
+    await act(async () => { vi.advanceTimersByTime(17000); });
+    expect(world.suggest).not.toHaveBeenCalled();
+    await act(async () => { vi.advanceTimersByTime(1500); });
+    expect(world.suggest).toHaveBeenCalledTimes(1);
+    expect(world.suggest).toHaveBeenCalledWith("access", "game_clock");
+    await act(async () => { vi.advanceTimersByTime(5000); });
+    expect(world.suggest).toHaveBeenCalledTimes(1);
+  });
+  it("never asks for guidance once the crossing is restored", async () => {
+    world.snapshot = fixture.states.game_bridge;
+    await act(async () => { await mission.startGame(); });
+    await act(async () => { vi.advanceTimersByTime(25000); });
+    expect(world.suggest).not.toHaveBeenCalled();
+  });
   it("keeps setup out of the timer when one population action fails", async () => {
     world.place.mockResolvedValueOnce({ accepted: true }).mockResolvedValueOnce({ accepted: true }).mockResolvedValueOnce({ accepted: false, rejection_reason: "resource_exhausted" });
     await act(async () => { await mission.startGame(); });

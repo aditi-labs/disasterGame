@@ -27,6 +27,10 @@ export interface PopulationMark {
   services: Partial<Record<ServiceKind, boolean>>;
   /** Capacity-bounded unmet units at this node (sum of the three needs), when reported. */
   unmet: number | null;
+  /** The same unmet units per need, when reported. */
+  unmetBy: Partial<Record<ServiceKind, number>> | null;
+  /** This village reaches the supply depot (false = cut off), when reported. */
+  depotReachable: boolean | null;
 }
 
 export interface FacilityMark {
@@ -146,6 +150,8 @@ export function buildBoardModel(
         status: populationStatus(snapshot, s.id),
         services,
         unmet: demand && unmetParts.every((n) => typeof n === "number") ? unmetParts.reduce<number>((a, n) => a + (n as number), 0) : null,
+        unmetBy: demand && unmetParts.every((n) => typeof n === "number") ? { food: demand.unmet_food!, medical: demand.unmet_medical!, refuge: demand.unmet_refuge! } : null,
+        depotReachable: demand?.depot_reachable ?? null,
       };
     });
 
