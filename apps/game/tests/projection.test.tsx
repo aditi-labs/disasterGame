@@ -4,14 +4,25 @@ import { BoardSvg } from "../src/game/overlays/BoardSvg";
 import { buildBoardModel } from "../src/game/worldAdapter";
 import { buildResults } from "../src/game/results";
 import { IDLE_VIEW } from "../src/game/clock";
-import { applyHomography, calibrationMatrix3d, DEFAULT_CALIBRATION, solveHomography, targetCorners } from "../src/game/homography";
+import { applyHomography, calibrationMatrix3d, DEFAULT_CALIBRATION, solveHomography, targetCorners, uvMatrix3d } from "../src/game/homography";
 import { looksLikeBridgeToCamera, PALETTE } from "../src/game/palette";
-import { BOARD_MARKERS, insideMarkerKeepout, MARKER_LAYOUT_VERIFIED, MARKERS_VERIFIED, PRINT_WORLD_ALIGNMENT_VERIFIED } from "../src/game/board";
+import { BOARD_MARKERS, insideMarkerKeepout, MARKER_LAYOUT_VERIFIED, MARKERS_VERIFIED } from "../src/game/board";
 import registration from "../../../perception/board_registration.json";
 import { setBoardAspect } from "../src/types/geometry";
 import { fixture } from "./fixtures";
 
 describe("projector registration", () => {
+  it("maps normalized world points through the measured matrix before pixel keystone", () => {
+    const m = [1.1,.1,-.05,.03,.8,.1,.02,-.04,1];
+    const width = 1000, height = 800;
+    const css = uvMatrix3d(m, width, height).slice(9,-1).split(",").map(Number);
+    for (const [u,v] of [[0,0],[1,0],[1,1],[0,1],[.3,.7]]) {
+      const x=u*width, y=v*height, w=css[3]*x+css[7]*y+css[15];
+      const expected=applyHomography(m.slice(0,8), [u,v]);
+      expect((css[0]*x+css[4]*y+css[12])/w).toBeCloseTo(expected[0]*width, 6);
+      expect((css[1]*x+css[5]*y+css[13])/w).toBeCloseTo(expected[1]*height, 6);
+    }
+  });
   const src: [number, number][] = [[0, 0], [1920, 0], [1920, 1080], [0, 1080]];
   it("maps all four measured corners and round-trips points under perspective", () => {
     const dst: [number, number][] = [[32, 10], [1880, 51], [1902, 1031], [20, 1074]];
@@ -39,7 +50,6 @@ describe("projector registration", () => {
     expect(BOARD_MARKERS.map(m => m.id)).toEqual([10, 11, 13, 12]);
     expect(MARKER_LAYOUT_VERIFIED).toBe(true);
     expect(MARKERS_VERIFIED).toBe(false);
-    expect(PRINT_WORLD_ALIGNMENT_VERIFIED).toBe(false);
   });
 });
 

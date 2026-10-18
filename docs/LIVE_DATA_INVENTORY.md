@@ -16,7 +16,8 @@ Verified from this checkout on 2026-10-18. This inventory describes checked-in f
 | `backend/world/session_store.py` | Optional SQLite checkpoint store via `FLOODSHIFT_SESSION`. Default server uses memory with the real bundle; there is no required external database |
 | `perception/board_registration.json` | Incoming Lane B photo evidence: verified IDs/layout/rotation; estimated landscape print dimensions and marker centres, not measured world UV |
 | `perception/tests/fixtures/real_board_photo_2026-10-18_upright_1400.jpg` | Actual team board photo in its final landscape orientation. Photo facts supersede the earlier legacy marker guesses |
-| `perception/classifier.py`, `perceptron_adapter.py`, `fusion.py` | Dev 2's incoming `9a66c47`; classification implementation, not a verified connection to the camera service or world gateway. See integration-contract import/interface gaps |
+| `perception/classifier.py`, `perceptron_adapter.py`, `fusion.py` | Connected ClassifierPort with bounded asynchronous work, distinct-frame agreement and no fabricated model confidence; hardware accuracy remains unmeasured |
+| `perception/board_mapping.json` | UNMEASURED print/world homography configuration; `scripts/register_print_world.py` fits actual landmark pairs and independent validation points |
 | `assets/piece_references/*.jpg` | Incoming actual bridge, hospital and food-station reference photographs. No shelter reference is checked in |
 
 The cartography is mapped source geography. Population, site suitability, flood closures, capacity, budget and outcomes are educational assumptions already in the source scenario, not measured demographic or operational flood predictions. The UI creates no replacement records. START places the existing population inputs at their scenario coordinates.
@@ -35,4 +36,4 @@ The geometry response contains no residential parcel footprints. Its four flood 
 
 The operator separately computes SHA-256 over the exact `/scenario` response bytes and includes it in downloaded run records. That is a geometry-response fingerprint, not a database or complete scenario-bundle fingerprint.
 
-Shared decisions still needed: resolve the printed-map/Mapbox source and obtain print bounds and the print-to-world transform; provide a second reviewed flood stage; measure marker centres/size and paper dimensions. The photo establishes IDs/layout/rotation, not live calibration. Existing backend additions in `1a1406f` still require shared review. This integration preserves Lane B's source unchanged and changes UI, tests and documentation to consume its verified facts.
+Shared measurements still needed: reconcile the physical print/source map and measure its landmark transform, marker centres/size and paper dimensions; supply a second reviewed flood stage. The photo establishes IDs/layout/rotation, not live calibration. The new adapter and projector read the same validated mapping; no transform values are guessed. Integration changes the gateway and perception connection while preserving the retained world rules and scenario.

@@ -1,0 +1,10 @@
+{
+  "schema": "floodshift.print_world_mapping.v1",
+  "status": "UNMEASURED",
+  "scenario_id": "nepal_rasuwa_hot_v1",
+  "print_to_world": null,
+  "measured_by": null,
+  "measured_on": null,
+  "source": null,
+  "note": "Supply the measured row-major 3x3 homography from normalized print UV to scenario world UV. Do not use identity or stretch the square map to fit the landscape print. Both this file and board_registration.json must be measured."
+}

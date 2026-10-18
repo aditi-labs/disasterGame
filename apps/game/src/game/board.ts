@@ -17,10 +17,8 @@ export interface BoardMarker {
 export const MARKER_PROVENANCE = "Lane B photo: TL 10 / TR 11 / BR 13 / BL 12; centres and paper dimensions UNMEASURED";
 export const MARKERS_VERIFIED = registration.status === "MEASURED" && registration.markers.every((m) => m.verified);
 export const MARKER_LAYOUT_VERIFIED = registration.markers.every((m) => m.id_and_layout_verified);
-/** No print-to-world transform has been supplied; projector keystone cannot replace it. */
-export const PRINT_WORLD_ALIGNMENT_VERIFIED = false;
 export const BOARD_REGISTRATION_REQUIRED = "BOARD REGISTRATION REQUIRED";
-export const PRINT_WORLD_ALIGNMENT_NOTE = "The photographed print is landscape and differs from the square world extent. A measured print-to-world transform is required; physical projection is held. Press M on the projector for screen rehearsal.";
+export const PRINT_WORLD_ALIGNMENT_NOTE = "Physical projection requires measured board_registration.json and board_mapping.json. The server validates these on startup; projector keystone cannot replace the print-to-world mapping. Press M for screen rehearsal.";
 
 export const BOARD_MARKERS: BoardMarker[] = registration.markers.map((m) => ({ id: m.id, center: m.center_uv as UV }));
 

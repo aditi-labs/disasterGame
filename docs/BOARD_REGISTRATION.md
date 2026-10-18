@@ -110,11 +110,13 @@ it cannot invent the missing geospatial mapping. Press `M` or open
 physical alignment evidence. Calibration/test reticles stay off the physical overlay while
 this mismatch is unresolved, and Enter cannot cause projector health to claim CALIBRATED.
 
-After shared integration supplies a measured print-UV/world-UV transform and matching
-print bounds, apply it to geometry, routes, physical observations and marker masks in the
-correct frames before enabling physical projection. Preserve the source square scenario;
-do not stretch it to the photographed paper aspect. Then run projector alignment and
-projector-on camera checks against the actual print.
+Use `scripts/register_print_world.py` with measured landmark pairs to write
+`perception/board_mapping.json`; see [PHYSICAL_INTEGRATION](PHYSICAL_INTEGRATION.md).
+The backend validates both measurement files at startup and serves their mapping at
+`/projection/registration`. The physical adapter uses print-to-world; the projector uses
+its inverse for geography and keeps marker masks in print space. Measured camera bounding
+boxes provide separate black piece-surface keep-outs. Preserve the source square scenario;
+then verify the output and classifier with the actual projector on the actual print.
 
 The existing projector pixel controls remain: `F` fullscreen; `M` screen/overlay;
 `C` calibration; `T` test reticles; arrows translate; `[`/`]` rotate;

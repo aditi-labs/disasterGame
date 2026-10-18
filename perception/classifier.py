@@ -110,7 +110,7 @@ class ClassificationMetrics:
     def record_classification(
         self,
         piece_class: PieceClass | None,
-        confidence: float,
+        confidence: float | None,
         latency_ms: float,
         from_cache: bool = False,
         from_perceptron: bool = True
@@ -137,9 +137,8 @@ class ClassificationMetrics:
         if piece_class:
             class_name = piece_class.value
             self.class_counts[class_name] = self.class_counts.get(class_name, 0) + 1
-            self.class_confidence_sum[class_name] = (
-                self.class_confidence_sum.get(class_name, 0.0) + confidence
-            )
+            if confidence is not None:
+                self.class_confidence_sum[class_name] = self.class_confidence_sum.get(class_name, 0.0) + confidence
 
     def record_failure(self, latency_ms: float):
         """Record a failed classification."""
@@ -252,7 +251,7 @@ class PieceClassifier:
         if cached is not None:
             self._metrics.record_classification(
                 cached.piece_class,
-                cached.confidence or 0.0,
+                cached.confidence,
                 0.0,
                 from_cache=True
             )
@@ -296,7 +295,7 @@ class PieceClassifier:
         if cached is not None:
             self._metrics.record_classification(
                 cached.piece_class,
-                cached.confidence or 0.0,
+                cached.confidence,
                 0.0,
                 from_cache=True
             )
@@ -311,8 +310,8 @@ class PieceClassifier:
 
             result = self._process_response(track_id, response)
         else:
-            # Fallback to color-based classification
-            result = self._classify_by_color(track_id, roi_image)
+            result = ClassificationResult(track_id, None, "perceptron", None, False,
+                                          evidence="Perceptron unavailable; no automatic color substitution")
 
         self._cache_result(track_id, result)
 
@@ -320,7 +319,7 @@ class PieceClassifier:
         if result.valid:
             self._metrics.record_classification(
                 result.piece_class,
-                result.confidence or 0.0,
+                result.confidence,
                 latency_ms,
                 from_cache=False,
                 from_perceptron=self._adapter.is_available
@@ -348,12 +347,16 @@ class PieceClassifier:
             )
 
         # Get the first/best detection
+        labels = {map_label_to_class(d.get("class")) for d in response.detections}
+        if None in labels or len(labels) != 1 or len(response.detections) != 1:
+            return ClassificationResult(track_id, None, "perceptron", None, False,
+                                        evidence="ambiguous or unknown piece classes")
         detection = response.detections[0]
         raw_class = detection.get("class", "unknown")
         piece_class = map_label_to_class(raw_class)
 
         # Parse confidence
-        confidence_str = detection.get("confidence", "low")
+        confidence_str = detection.get("confidence")
         confidence = self._parse_confidence(confidence_str)
 
         return ClassificationResult(
@@ -361,26 +364,19 @@ class PieceClassifier:
             piece_class=piece_class,
             class_source="perceptron",
             confidence=confidence,
-            valid=True,
+            valid=piece_class is not None,
             latency_ms=int(response.latency_ms),
             evidence=detection.get("reasoning")
         )
 
-    def _parse_confidence(self, confidence_value) -> float:
+    def _parse_confidence(self, confidence_value) -> float | None:
         """Parse confidence value from Perceptron response."""
-        if isinstance(confidence_value, (int, float)):
-            return float(confidence_value)
+        if isinstance(confidence_value, (int, float)) and not isinstance(confidence_value, bool):
+            import math
+            n = float(confidence_value)
+            return n if math.isfinite(n) and 0 <= n <= 1 else None
 
-        if isinstance(confidence_value, str):
-            confidence_map = {
-                "high": 0.9,
-                "medium": 0.7,
-                "low": 0.4,
-                "very low": 0.2,
-            }
-            return confidence_map.get(confidence_value.lower(), 0.5)
-
-        return 0.5
+        return None
 
     def _cache_result(self, track_id: str, result: ClassificationResult):
         """Cache a classification result."""

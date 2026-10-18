@@ -5,6 +5,14 @@
 
 export type Pt = [number, number];
 
+/** Normalized world-UV -> print-UV homography in an SVG's pixel coordinates. */
+export function uvMatrix3d(m: number[], w: number, h: number): string {
+  if (m.length !== 9 || !m.every(Number.isFinite)) throw new Error("Invalid measured mapping");
+  const cols = [m[0], m[3]*h/w, 0, m[6]/w, m[1]*w/h, m[4], 0, m[7]/h,
+    0, 0, 1, 0, m[2]*w, m[5]*h, 0, m[8]];
+  return `matrix3d(${cols.join(",")})`;
+}
+
 export interface Calibration {
   dx: number;
   dy: number;

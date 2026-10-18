@@ -21,6 +21,7 @@ export interface WorldTransport {
   /** POST /reset: the gateway reads the current version itself, so reset never goes stale. */
   reset(): Promise<{ reset: boolean; world_version: number }>;
   suggest(goalId: string): Promise<SuggestResponse>;
+  controlRun(sessionId: string, state: "start" | "pause" | "resume" | "close"): Promise<{ snapshot?: WorldSnapshot }>;
 }
 
 const STALE_AFTER_MS = 10_000;
@@ -127,6 +128,7 @@ export function createLiveTransport(baseUrl: string): WorldTransport {
     perceptionStatus: () => get<PerceptionStatus>("/perception/status"),
     sendAction: (action) => post<ActionResult>("/action", action),
     reset: () => post<{ reset: boolean; world_version: number }>("/reset", {}),
+    controlRun: (sessionId, state) => post<{ snapshot?: WorldSnapshot }>("/perception/run", { session_id: sessionId, state }),
     // The ghost itself arrives in the next snapshot's ghost_suggestion.
     suggest: (goalId) => post<SuggestResponse>("/plan/suggest", { goal_id: goalId }),
   };

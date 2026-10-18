@@ -4,7 +4,7 @@ import { perceptionView } from "../../live/perceptionStatus";
 import type { TokenType, WorldSnapshot } from "../../types/contracts";
 import { TOKEN_SITE_KIND } from "../../types/contracts";
 import type { ScenarioGeometry } from "../../types/scenario";
-import { MARKER_LAYOUT_VERIFIED, MARKER_PROVENANCE, MARKERS_VERIFIED, PRINT_WORLD_ALIGNMENT_NOTE, PRINT_WORLD_ALIGNMENT_VERIFIED } from "../../game/board";
+import { MARKER_LAYOUT_VERIFIED, MARKER_PROVENANCE, PRINT_WORLD_ALIGNMENT_NOTE } from "../../game/board";
 import { BOUNDARIES_S, MISSION_MS } from "../../game/clock";
 import { BoardSvg } from "../../game/overlays/BoardSvg";
 import { PieceIcon } from "../../game/overlays/glyphs";
@@ -97,6 +97,7 @@ export function OperatorRoute() {
   const projectorSeen = mission.projector && Date.now() - mission.projector.seenAt < 3000;
   const projectorValue = !projectorSeen ? "NOT OPEN" : !mission.projector!.overlay ? "SCREEN" : !mission.projector!.alignmentVerified ? "ALIGNMENT REQUIRED" : mission.projector!.calibratedAt ? "CALIBRATED" : "UNCALIBRATED";
   const telemetry = perceptionView(perception, health?.perceptron_status);
+  const alignmentReady = world.registration?.ready === true;
 
   const downloadRun = () => {
     const record = {
@@ -111,7 +112,7 @@ export function OperatorRoute() {
       final_world_version: resultSnapshot?.world_version ?? null,
       final_phase: phase,
       surge: clock.surge,
-      marker_registration: { verified: MARKERS_VERIFIED, layout_verified_from_photo: MARKER_LAYOUT_VERIFIED, print_world_alignment_verified: PRINT_WORLD_ALIGNMENT_VERIFIED, provenance: MARKER_PROVENANCE },
+      marker_registration: { verified: alignmentReady, layout_verified_from_photo: MARKER_LAYOUT_VERIFIED, print_world_alignment_verified: alignmentReady, provenance: MARKER_PROVENANCE },
       events: world.run,
       final_game: resultSnapshot?.game ?? null,
       final_metrics: resultSnapshot?.metrics ?? null,
@@ -125,7 +126,7 @@ export function OperatorRoute() {
   };
 
   if (!tools) {
-    return <StartScreen mode={clock.mode} phase={phase} remainingMs={view.remainingMs} ready={liveData && connected} starting={busy} physicalInputReady={telemetry.camera.tone === "ok" && telemetry.registrationReady && telemetry.perceptron.tone === "ok" && PRINT_WORLD_ALIGNMENT_VERIFIED} error={mission.startError ?? (!liveData ? scenarioError ?? healthError ?? null : null)} onStart={() => void mission.startGame()} />;
+    return <StartScreen mode={clock.mode} phase={phase} remainingMs={view.remainingMs} ready={liveData && connected} starting={busy} physicalInputReady={telemetry.camera.tone === "ok" && telemetry.registrationReady && telemetry.perceptron.tone === "ok" && alignmentReady} error={mission.startError ?? (!liveData ? scenarioError ?? healthError ?? null : null)} onStart={() => void mission.startGame()} />;
   }
 
   return (
@@ -159,8 +160,8 @@ export function OperatorRoute() {
       {liveData && (scenario?.stage_count ?? 0) < 3 && (
         <div className="banner banner-warn">This scenario has one flood stage, activated at START. The 50-second surge will report FLOOD UPDATE UNAVAILABLE until the data owner supplies a second stage.</div>
       )}
-      {!MARKERS_VERIFIED && <div className="banner banner-warn">ArUco: {MARKER_PROVENANCE}. Lane B still needs ruler measurements and a live reprojection check (docs/BOARD_REGISTRATION.md).</div>}
-      {!PRINT_WORLD_ALIGNMENT_VERIFIED && <div className="banner banner-warn">{PRINT_WORLD_ALIGNMENT_NOTE}</div>}
+      {!alignmentReady && <div className="banner banner-warn">ArUco: {MARKER_PROVENANCE}. Measure registration and print bounds before physical play (docs/BOARD_REGISTRATION.md).</div>}
+      {!alignmentReady && <div className="banner banner-warn">{PRINT_WORLD_ALIGNMENT_NOTE}</div>}
 
       <main className="op-grid">
         <section className="card op-mission">
@@ -190,11 +191,6 @@ export function OperatorRoute() {
             {preStart && (
               <button className="btn" onClick={() => void world.reload()}>
                 LOAD LIVE SCENARIO
-              </button>
-            )}
-            {clock.mode === "idle" && (
-              <button className="btn btn-quiet" onClick={mission.intro} disabled={!liveData} title="Optional transition card, outside the 75-second clock">
-                PLAY INTRO CARD
               </button>
             )}
             {preStart && (

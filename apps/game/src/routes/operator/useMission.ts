@@ -46,6 +46,8 @@ export function useMission(world: LiveWorld) {
   const operationPending = useRef(false);
   const phase = phaseOf(clock, now);
   const [finalState, setFinalState] = useState<{ sessionId: string; snapshot: WorldSnapshot } | null>(null);
+  const closing = useRef(false);
+  const closeRetryAt = useRef(0);
   const finalSnapshot = phase === "RESULTS" && finalState?.sessionId === clock.sessionId ? finalState.snapshot : null;
   const awaitingWorld = world.inFlight > 0 || world.status !== "live" || (world.snapshot?.world_version ?? -1) < world.knownVersion();
   const resultsSyncing = awaitingWorld || (phase === "RESULTS" && !finalSnapshot);
@@ -54,15 +56,20 @@ export function useMission(world: LiveWorld) {
   const syncingRef = useRef(resultsSyncing);
   syncingRef.current = resultsSyncing;
 
-  // Capture once, after all UI acknowledgments have their authoritative snapshot.
-  // Late camera events still reach the world; they cannot rewrite this run's result.
+  // Close physical input under the backend mutation lock, then capture its snapshot.
   useEffect(() => {
     if (phase !== "RESULTS") {
       setFinalState(null);
-    } else if (!finalSnapshot && !awaitingWorld && world.snapshot && clock.sessionId) {
-      setFinalState({ sessionId: clock.sessionId, snapshot: world.snapshot });
+    } else if (!finalSnapshot && !closing.current && now >= closeRetryAt.current && !awaitingWorld && clock.sessionId) {
+      const sessionId = clock.sessionId;
+      closing.current = true;
+      void world.controlRun(sessionId, "close").then(result => {
+        if (!result.snapshot) throw new Error("Final snapshot unavailable");
+        if (clockRef.current.sessionId === sessionId) setFinalState({ sessionId, snapshot: result.snapshot });
+      }).catch(() => { closeRetryAt.current = performance.now() + 2000; setNotice("Final state not confirmed. Reconnect to complete results."); })
+        .finally(() => { closing.current = false; });
     }
-  }, [phase, clock.sessionId, awaitingWorld, world.snapshot, finalSnapshot]);
+  }, [phase, clock.sessionId, awaitingWorld, world.snapshot, finalSnapshot, now]);
 
   useEffect(() => {
     const onMessage = (m: ChannelMessage) => {
@@ -158,6 +165,7 @@ export function useMission(world: LiveWorld) {
         else throw new Error(`Population ${site.id} not placed: ${r?.rejection_reason ?? "request failed"}. Reset and retry START.`);
       }
       if (!populated) throw new Error("no scenario population record could be placed");
+      await world.controlRun(sessionId, "start");
       surgeSent.current = null;
       setRejections([]);
       clearAll();
@@ -234,6 +242,19 @@ export function useMission(world: LiveWorld) {
     return r;
   }, [world]);
 
+  const transition = async (state: "pause" | "resume") => {
+    const sessionId = clockRef.current.sessionId;
+    if (!sessionId || operationPending.current) return;
+    operationPending.current = true;
+    try {
+      await worldRef.current.controlRun(sessionId, state);
+      dispatch({ type: state, now: performance.now() });
+      setNotice(null);
+    } catch {
+      setNotice(`${state.toUpperCase()} was not confirmed by the backend.`);
+    } finally { operationPending.current = false; }
+  };
+
   return {
     clock,
     now,
@@ -250,9 +271,8 @@ export function useMission(world: LiveWorld) {
     rejections,
     startGame,
     resetGame,
-    intro: () => dispatch({ type: "intro" }),
-    pause: () => dispatch({ type: "pause", now: performance.now() }),
-    resume: () => dispatch({ type: "resume", now: performance.now() }),
+    pause: () => transition("pause"),
+    resume: () => transition("resume"),
     end: () => dispatch({ type: "end", now: performance.now() }),
     advanceFlood,
     suggestBridge,

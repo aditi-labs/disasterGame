@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { ObjectObservation, UV, WorldSnapshot } from "../../types/contracts";
+import type { ObjectObservation, ProjectionRegistration, UV, WorldSnapshot } from "../../types/contracts";
 import type { RoadGeometry, ScenarioGeometry } from "../../types/scenario";
 import { BOARD_HEIGHT, BOARD_WIDTH, toSvgPoint, uvToPathD, uvToPoints } from "../../types/geometry";
 import type { ActiveReaction } from "../../live/useLiveWorld";
@@ -12,6 +12,7 @@ import type { Results } from "../results";
 import { BEATS, FLOOD_UPDATE_UNAVAILABLE, PIECE_NAME, SUBTITLE, TITLE } from "../story";
 import type { BoardModel, PopulationMark } from "../worldAdapter";
 import { FloodLayer } from "./FloodLayer";
+import { applyHomography, uvMatrix3d } from "../homography";
 import { MatsyaMark, PIECE_COLOR, PieceGlyph, PopulationCluster } from "./glyphs";
 
 // The projected board, used full-size on /projector and as the operator's mini map.
@@ -26,7 +27,7 @@ export interface BoardSvgProps {
   clock: ClockView;
   reactions: ActiveReaction[];
   rejections: RejectionCue[];
-  pending: ObjectObservation[];
+  pending: Pick<ObjectObservation, "token_id" | "board_uv">[];
   surface: "overlay" | "screen";
   variant: "projector" | "operator";
   results: Results | null;
@@ -37,6 +38,8 @@ export interface BoardSvgProps {
   testPattern?: boolean;
   onSiteClick?: (siteId: string) => void;
   highlightSite?: string | null;
+  registration?: ProjectionRegistration | null;
+  occlusions?: UV[][];
 }
 
 const S = (uv: UV) => toSvgPoint(uv[0], uv[1]);
@@ -62,9 +65,25 @@ export function BoardSvg(props: BoardSvgProps) {
   const latest = live[live.length - 1];
   const W = BOARD_WIDTH;
   const H = BOARD_HEIGHT;
+  const mapping = surface === "overlay" && props.registration?.ready ? props.registration.world_to_print : null;
+  const measuredRadius = (uv: UV) => {
+    const matrix = mapping && props.registration?.print_to_world;
+    if (!matrix) return 30;
+    const m = matrix.map(n => n / matrix[8]);
+    const at = S(uv);
+    let radius = 30;
+    for (const footprint of props.occlusions ?? []) {
+      const points = footprint.map(p => S(applyHomography(m, p)));
+      if (!points.length) continue;
+      const center = { x: points.reduce((n,p) => n+p.x,0)/points.length, y: points.reduce((n,p) => n+p.y,0)/points.length };
+      const extent = Math.max(...points.map(p => Math.hypot(p.x-center.x,p.y-center.y)));
+      if (Math.hypot(at.x-center.x,at.y-center.y) <= extent) radius = Math.max(radius, ...points.map(p => Math.hypot(p.x-at.x,p.y-at.y)+8));
+    }
+    return radius;
+  };
 
   return (
-    <svg className={`board board-${surface} board-${variant}`} data-projector-design="map-overlay-v2" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" role={onSiteClick ? "group" : "img"} aria-label="FLOODSHIFT projected board">
+    <svg className={`board board-${surface} board-${variant}`} data-projector-design="map-overlay-v3" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio={mapping ? "none" : "xMidYMid meet"} role={onSiteClick ? "group" : "img"} aria-label="FLOODSHIFT projected board">
       <defs>
         <pattern id="hatch-danger" width={7} height={7} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
           <line x1={0} y1={0} x2={0} y2={7} stroke={PALETTE.dangerHatch} strokeWidth={1.2} opacity={0.75} />
@@ -82,6 +101,7 @@ export function BoardSvg(props: BoardSvgProps) {
         </filter>
       </defs>
 
+      <g className="world-geometry" style={mapping ? { transform: uvMatrix3d(mapping, W, H), transformOrigin: "0 0" } : undefined}>
       {/* 1 · Base: rehearsal basemap only; the printed board already carries the map. */}
       {surface === "screen" ? <Basemap scenario={scenario} /> : <rect width={W} height={H} fill="#000" />}
       <rect width={W} height={H} fill="url(#vignette)" pointerEvents="none" />
@@ -152,10 +172,11 @@ export function BoardSvg(props: BoardSvgProps) {
           <g className="layer-pieces" pointerEvents="none">
             {model.bridges.map((b) => {
               const c = S(b.uv);
+              const radius = measuredRadius(b.uv);
               return (
                 <g key={b.tokenId} transform={`translate(${c.x} ${c.y})`}>
-                  <circle r={30} className={`piece-ring ${b.connected ? "on" : "off"}`} style={{ stroke: b.connected ? PALETTE.route : PALETTE.bridge }} />
-                  <g transform="translate(32 -30)">
+                  <circle r={radius} className={`piece-ring ${b.connected ? "on" : "off"}`} style={{ stroke: b.connected ? PALETTE.route : PALETTE.bridge }} />
+                  <g transform={`translate(${radius+8} ${-radius})`}>
                     <PieceGlyph type="bridge" size={14} color={b.connected ? PALETTE.routeBright : PALETTE.bridge} />
                   </g>
                 </g>
@@ -163,16 +184,17 @@ export function BoardSvg(props: BoardSvgProps) {
             })}
             {model.facilities.map((f) => {
               const c = S(f.uv);
+              const radius = measuredRadius(f.uv);
               const on = f.active && f.supplied;
               const color = PIECE_COLOR[f.type] ?? PALETTE.text;
               return (
                 <g key={f.tokenId} transform={`translate(${c.x} ${c.y})`}>
                   {on && <circle r={36} fill={color} opacity={0.1} filter="url(#soft-glow)" />}
-                  <circle r={30} className={`piece-ring ${on ? "on" : "off"} ${f.full ? "full" : ""}`} style={{ stroke: color }} />
-                  <g transform="translate(32 -30)">
+                  <circle r={radius} className={`piece-ring ${on ? "on" : "off"} ${f.full ? "full" : ""}`} style={{ stroke: color }} />
+                  <g transform={`translate(${radius+8} ${-radius})`}>
                     <PieceGlyph type={f.type} size={14} />
                   </g>
-                  <text y={48} className={`cap-label ${f.full ? "full" : ""}`} fontSize={compact ? 10 : 11}>
+                  <text y={radius+18} className={`cap-label ${f.full ? "full" : ""}`} fontSize={compact ? 10 : 11}>
                     {!on ? "NO ACCESS" : f.full ? `FULL ${f.used}/${f.capacity}` : `${f.used}/${f.capacity}`}
                   </text>
                 </g>
@@ -206,7 +228,7 @@ export function BoardSvg(props: BoardSvgProps) {
         <g className="layer-pending" pointerEvents="none">
           {pending.map((o) => {
             const c = S(o.board_uv);
-            return <circle key={o.token_id} cx={c.x} cy={c.y} r={26} className="pending-ring" />;
+            return <circle key={o.token_id} cx={c.x} cy={c.y} r={measuredRadius(o.board_uv)} className="pending-ring" />;
           })}
         </g>
       )}
@@ -217,16 +239,17 @@ export function BoardSvg(props: BoardSvgProps) {
           {live.map((set) => (
             <g key={set.key}>
               {set.cues.map((c) => (
-                <CueMark key={c.id} c={c} roads={roads} />
+                <CueMark key={c.id} c={c} roads={roads} radius={c.uv ? measuredRadius(c.uv) : 30} />
               ))}
             </g>
           ))}
           {rejections.map((r) => {
             const c = S(r.uv);
+            const radius = measuredRadius(r.uv);
             return (
               <g key={r.id} transform={`translate(${c.x} ${c.y})`} className="reject">
-                <circle r={28} className="reject-ring" />
-                <text y={-40} className="reject-text" fontSize={compact ? 11 : 13}>
+                <circle r={radius} className="reject-ring" />
+                <text y={-radius-12} className="reject-text" fontSize={compact ? 11 : 13}>
                   {r.text}
                 </text>
               </g>
@@ -234,7 +257,7 @@ export function BoardSvg(props: BoardSvgProps) {
           })}
           {live.map((set) =>
             set.pieceLabel ? (
-              <text key={`pl-${set.key}`} x={S(set.pieceLabel.uv).x} y={S(set.pieceLabel.uv).y + 66} className={`piece-label tone-${set.pieceLabel.tone}`} fontSize={compact ? 10 : 12}>
+              <text key={`pl-${set.key}`} x={S(set.pieceLabel.uv).x} y={S(set.pieceLabel.uv).y + measuredRadius(set.pieceLabel.uv) + 36} className={`piece-label tone-${set.pieceLabel.tone}`} fontSize={compact ? 10 : 12}>
                 {set.pieceLabel.text}
               </text>
             ) : null,
@@ -242,6 +265,7 @@ export function BoardSvg(props: BoardSvgProps) {
         </g>
       )}
 
+      </g>
       {/* 12 · Compact edge narrative, with marker keep-outs applied last. */}
       {!compact && <Hud phase={phase} clock={clock} headline={latest?.headline ?? null} headlineKey={latest?.key ?? ""} />}
 
@@ -273,12 +297,18 @@ export function BoardSvg(props: BoardSvgProps) {
       {testPattern && <TestPattern />}
 
       {/* 16 · ArUco keep-outs. Overlay: solid black (no projected light on markers). */}
+      {surface === "overlay" && <g className="layer-piece-keepouts" pointerEvents="none">
+        {(props.occlusions ?? []).map((p, i) => <polygon key={i} points={uvToPoints(p)} fill="#000" />)}
+      </g>}
       {(surface === "overlay" || compact) && <g className="layer-markers" pointerEvents="none">
-        {BOARD_MARKERS.map((m) => {
+        {(props.registration?.markers?.map(m => ({ id: m.id, center: m.center_uv })) ?? BOARD_MARKERS).map((m) => {
           const c = S(m.center);
-          const h = MARKER_KEEPOUT_HALF_UV * W;
+          const board = props.registration?.board;
+          const markerSize = props.registration?.marker_size_mm;
+          const h = board && markerSize ? (markerSize / 2 + 6) / board.width_mm * W : MARKER_KEEPOUT_HALF_UV * W;
+          const v = board && markerSize ? (markerSize / 2 + 6) / board.height_mm * H : h;
           return surface === "overlay" ? (
-            <rect key={m.id} x={c.x - h} y={c.y - h} width={h * 2} height={h * 2} fill="#000" />
+            <rect key={m.id} x={c.x - h} y={c.y - v} width={h * 2} height={v * 2} fill="#000" />
           ) : (
             <g key={m.id}>
               <rect x={c.x - h} y={c.y - h} width={h * 2} height={h * 2} className="marker-box" />
@@ -383,14 +413,14 @@ function Population({ p, compact }: { p: PopulationMark; compact: boolean }) {
   );
 }
 
-function CueMark({ c, roads }: { c: Cue; roads: Map<string, RoadGeometry> }) {
+function CueMark({ c, roads, radius }: { c: Cue; roads: Map<string, RoadGeometry>; radius: number }) {
   const at = c.uv ? S(c.uv) : null;
   switch (c.kind) {
     case "halo":
       return at ? (
         <g transform={`translate(${at.x} ${at.y})`}>
-          <circle r={30} className="cue-halo" />
-          <circle r={30} className="cue-rim" />
+          <circle r={radius} className="cue-halo" />
+          <circle r={radius} className="cue-rim" />
         </g>
       ) : null;
     case "removed":
@@ -452,17 +482,7 @@ function Hud({ phase, clock, headline, headlineKey }: { phase: BoardSvgProps["cl
       </g>
     );
   }
-  if (phase === "INTRO") {
-    return (
-      <g className="hud hud-intro" pointerEvents="none">
-        <rect width={W} height={BOARD_HEIGHT} fill="#000" opacity={0.7} />
-        <text x={W / 2} y={BOARD_HEIGHT / 2} className="intro-line">
-          {beat.line}
-        </text>
-        <FishCurrent key="intro" y={BOARD_HEIGHT / 2 + 40} />
-      </g>
-    );
-  }
+  if (phase === "INTRO") return null;
   if (phase === "RESULTS") return null;
   return (
     <g className="hud" pointerEvents="none">
@@ -484,18 +504,6 @@ function Hud({ phase, clock, headline, headlineKey }: { phase: BoardSvgProps["cl
         </text>
       )}
       <g transform={`translate(${W / 2} ${BOARD_HEIGHT - 20})`} color={PALETTE.waterHatch} opacity={0.45}><MatsyaMark size={24} /></g>
-    </g>
-  );
-}
-
-function FishCurrent({ y }: { y: number }) {
-  const x0 = 170;
-  const x1 = 780;
-  const d = `M${x0} ${y} C${x0 + 120} ${y - 10} ${x0 + 220} ${y + 10} ${x0 + 330} ${y} S${x1 - 120} ${y - 8} ${x1} ${y}`;
-  return (
-    <g className="fish-current">
-      <path d={d} className="fish-line" />
-      <path d={`M${x1} ${y} l14 -9 l-4 9 l4 9 z`} className="fish-tail" />
     </g>
   );
 }

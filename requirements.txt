@@ -3,12 +3,12 @@
 # Install with: pip install -r requirements.txt
 
 # Core CV
-opencv-python>=4.8.0
+opencv-contrib-python>=4.13,<5
 numpy>=1.24.0
 
 # Perceptron SDK (official)
 # https://github.com/perceptron-ai-inc/perceptron
-perceptron>=0.4.0
+perceptron>=0.4.0,<0.5
 
 # HTTP client (fallback for Perceptron API)
 httpx>=0.25.0

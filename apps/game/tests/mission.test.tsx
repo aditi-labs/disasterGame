@@ -20,6 +20,7 @@ beforeEach(() => {
     place: vi.fn().mockResolvedValue(accepted), move: vi.fn().mockResolvedValue(accepted), remove: vi.fn().mockResolvedValue(accepted),
     advanceStage: vi.fn().mockResolvedValue({ accepted: false, world_version: 1, rejection_reason: "last_stage" }),
     suggest: vi.fn().mockResolvedValue({ has_suggestion: false }), clearPending: vi.fn(), push: vi.fn(),
+    controlRun: vi.fn().mockImplementation(async () => ({ snapshot: world.snapshot })),
   };
   function Harness() { mission = useMission(world); return null; }
   act(() => { renderer = create(<Harness />); });
@@ -49,8 +50,8 @@ describe("operator mission controller", () => {
     expect(world.advanceStage).toHaveBeenCalledTimes(1);
     expect(world.advanceStage.mock.calls[0][1]).toBe("game_clock");
     expect(mission.clock.surge.status).toBe("failed");
-    act(() => mission.pause());
-    act(() => { vi.advanceTimersByTime(10000); mission.resume(); });
+    await act(async () => { await mission.pause(); });
+    await act(async () => { vi.advanceTimersByTime(10000); await mission.resume(); });
     await act(async () => { vi.advanceTimersByTime(1000); });
     expect(world.advanceStage).toHaveBeenCalledTimes(1);
   });
@@ -102,7 +103,7 @@ describe("operator mission controller", () => {
     expect(mission.finalSnapshot).toBeNull();
     expect(mission.resultsSyncing).toBe(true);
     world.snapshot = fixture.states.connected;
-    act(() => { vi.advanceTimersByTime(100); });
+    await act(async () => { vi.advanceTimersByTime(100); });
     expect(mission.finalSnapshot).toBe(fixture.states.connected);
     expect(messages.filter(m => m.t === "clock").at(-1).finalSnapshot).toBe(fixture.states.connected);
     world.snapshot = fixture.states.services;

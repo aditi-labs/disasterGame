@@ -81,13 +81,19 @@ def score(track: Track, lifecycle: Lifecycle, uv: BoardUV | None, registration: 
                       f"localisation quality {localization:.2f} below {cfg.review_band_min_localization}")
     if not cls.valid or cls.piece_class is None:
         return Scored(localization, detection, ConfidenceBand.REVIEW, "class not verified")
-    if detection is None:
+    if track.needs_classification:
+        return Scored(localization, detection, ConfidenceBand.REVIEW, "reclassification pending")
+    consensus = cls.class_source == "perceptron" and cls.agreement_frames >= 3
+    if detection is None and not consensus:
         # Classifier reported a class but no confidence value: never pretend it is high.
         return Scored(localization, None, ConfidenceBand.REVIEW, "class without reported confidence")
-    if detection < cfg.high_band_min_class_confidence:
+    if detection is not None and detection < cfg.high_band_min_class_confidence:
         return Scored(localization, detection, ConfidenceBand.REVIEW,
                       f"class confidence {detection:.2f} below {cfg.high_band_min_class_confidence}")
     if localization < cfg.high_band_min_localization:
         return Scored(localization, detection, ConfidenceBand.REVIEW,
                       f"localisation quality {localization:.2f} below {cfg.high_band_min_localization}")
-    return Scored(localization, detection, ConfidenceBand.HIGH, "stable, classified, localised")
+    reason = "stable, classified, localised"
+    if detection is None:
+        reason += f"; {cls.agreement_frames} agreeing Perceptron frames, no model confidence reported"
+    return Scored(localization, detection, ConfidenceBand.HIGH, reason)

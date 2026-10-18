@@ -113,6 +113,10 @@ const REJECTION_COPY: Record<string, string> = {
   unknown_token: "PIECE NOT ON BOARD",
   start_is_latched: "START STAYS UNTIL RESET",
   last_stage: "NO FURTHER FLOOD STAGE",
+  piece_class_changed_remove_first: "LIFT PIECE AND RETRY",
+  camera_registration_required: "CAMERA ALIGNMENT REQUIRED",
+  camera_status_stale: "CAMERA CONNECTION LOST",
+  mission_input_closed: "INPUT PAUSED",
   no_suggestion: "NO VALID SUGGESTION",
 };
 
