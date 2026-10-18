@@ -273,7 +273,8 @@
       "node_id": "village",
       "unmet_medical": 0,
       "unmet_food": 0,
-      "unmet_refuge": 0
+      "unmet_refuge": 0,
+      "depot_reachable": true
     }
   ],
   "routes": [

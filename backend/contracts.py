@@ -177,6 +177,8 @@ class PopulationDemand(BaseModel):
     token_id: str | None = None
     node_id: str | None = None
     headcount_known: bool | None = None
+    # This node reaches the supply depot (the per-node term of metrics.reachable_communities).
+    depot_reachable: bool | None = None
 
 
 class EdgeState(BaseModel):

@@ -94,7 +94,9 @@ def measure(bundle, state):
                                     'board_uv': route_geometry(edges, result['path'], nodes)})
             metrics['unmet_' + need + '_model'] += remaining
             person['unmet_' + need] = remaining
-    metrics['reachable_communities'] = sum(route(bundle['depot_node'], p['node_id'])['reachable'] for p in people)
+    for person in people:
+        person['depot_reachable'] = route(bundle['depot_node'], person['node_id'])['reachable']
+    metrics['reachable_communities'] = sum(p['depot_reachable'] for p in people)
     metrics['road_access_fraction'] = sum(not e['blocked'] for e in edges) / len(edges) if edges else 0
     result = {'edges': edges, 'facilities': facilities, 'population_demand': people,
               'routes': allocations, 'service_routes': service_routes, 'metrics': metrics}

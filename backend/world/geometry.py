@@ -97,8 +97,11 @@ def scenario_geometry(bundle, data_dir=None):
               'kind': 'crossing' if e['id'] in crossing_edges else 'road',
               'path': e.get('board_uv') or [nodes[e['from']], nodes[e['to']]]}
              for e in bundle['roads']['edges']]
+    # edge_id / resource_cost / capacity_model are passed through unchanged so the game UI can
+    # highlight only pads the rules could accept, without inferring them from id naming.
     sites = [{'id': s['id'], 'kind': s['kind'], 'label': site_label(s), 'board_uv': s['board_uv'],
-              'tolerance_uv': s['tolerance_uv'], **({'rotation_deg': s['rotation_deg']} if 'rotation_deg' in s else {})}
+              'tolerance_uv': s['tolerance_uv'],
+              **{k: s[k] for k in ('rotation_deg', 'edge_id', 'resource_cost', 'capacity_model') if k in s}}
              for s in bundle['sites']]
     rivers = [line for f in _read_layer(data_dirs, 'waterways_board.json') for line in _lines(f['geometry'])]
     labels = [{'text': f['properties']['name_en'], 'board_uv': f['geometry']['coordinates']}
