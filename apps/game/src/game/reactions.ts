@@ -1,6 +1,6 @@
 import type { PlacedToken, ServiceKind, ServiceRoute, TokenType, UV, WorldSnapshot } from "../types/contracts";
 import type { ScenarioGeometry } from "../types/scenario";
-import { ACTIVE_LABEL, PIECE_NAME } from "./story";
+import { PIECE_NAME } from "./story";
 import { peopleReachable, populationStatus, routeKey, SERVICE_OF, unmetNeed } from "./worldAdapter";
 
 // Snapshot diff -> visual cues (spec §8 "World reaction to visual reaction mapping").
@@ -142,22 +142,36 @@ function improved(prev: WorldSnapshot, next: WorldSnapshot, service: ServiceKind
 
 function headline(prev: WorldSnapshot, next: WorldSnapshot, c: Changes): ReactionSet["headline"] {
   if (next.simulation_stage > prev.simulation_stage) {
-    const affected = next.population_demand.some((d) => populationStatus(next, d.id) === "danger" && populationStatus(prev, d.id) !== "danger");
-    // The dataset gives these nodes no reviewed area name, so none is invented.
-    return { text: affected ? "POPULATION AREA AFFECTED" : `FLOOD STAGE ${next.simulation_stage}`, tone: "bad" };
+    // Name what the surge actually cut: facilities that lost their last reachable route.
+    const cut = next.facilities.filter((f) => servedBy(prev, f.id) && !servedBy(next, f.id));
+    if (cut.length) return { text: `${cut.map((f) => PIECE_NAME[f.type] ?? f.type).join(" + ")} CUT OFF BY FLOODWATER`, tone: "bad" };
+    if (c.lost.length || c.communities < 0) return { text: "FLOODWATER CUTS A ROUTE", tone: "bad" };
+    const held = next.facilities.find((f) => servedBy(next, f.id));
+    return held ? { text: `ROAD FLOODED · YOUR ${PIECE_NAME[held.type] ?? "SERVICE"} STILL HOLDS`, tone: "good" } : { text: "AN EVACUATION ROAD IS FLOODED", tone: "bad" };
   }
 
   const placed = c.added[0];
+  // A confirmed move is a new world: compare the whole outcome, not just the moved piece.
+  if (placed && c.moved.some((m) => m.id === placed.id)) {
+    const unmet = (s: WorldSnapshot) => unmetNeed(s, "food") + unmetNeed(s, "medical") + unmetNeed(s, "refuge");
+    const delta = unmet(prev) - unmet(next);
+    if (c.lost.length || c.communities < 0) return { text: "MOVE CONFIRMED · ACCESS LOST", tone: "bad" };
+    if (delta > 0) return { text: `MOVE CONFIRMED · ${delta} MORE NEEDS MET`, tone: "good" };
+    if (delta < 0) return { text: `MOVE CONFIRMED · ${-delta} FEWER NEEDS MET`, tone: "bad" };
+    if (c.opened.length || c.communities > 0) return { text: "MOVE CONFIRMED · ACCESS IMPROVED", tone: "good" };
+    return { text: "MOVE CONFIRMED · SAME OUTCOME", tone: "info" };
+  }
   if (placed && placed.type === "bridge") {
-    if (c.opened.length) return { text: "ROUTE RESTORED", tone: "good" };
-    if (c.communities > 0) return { text: "ACCESS RESTORED", tone: "good" };
-    return { text: "BRIDGE PLACED · NO NEW ACCESS", tone: "info" };
+    if (c.opened.length || c.communities > 0) return { text: "CROSSING RESTORED — ACCESS IMPROVED", tone: "good" };
+    return { text: "BRIDGE PLACED · NO ONE RECONNECTED", tone: "info" };
   }
   if (placed) {
     const service = SERVICE_OF[placed.type];
     if (service) {
+      const met = unmetNeed(prev, service) - unmetNeed(next, service);
+      if (met > 0) return { text: `${PIECE_NAME[placed.type]} OPEN — ${met} ${SERVICE_WORD[service]} NEEDS MET`, tone: "good" };
       if (improved(prev, next, service)) return { text: `${SERVICE_WORD[service]} ACCESS IMPROVED`, tone: "good" };
-      return { text: "PLACED · ACCESS STILL LIMITED", tone: "bad" };
+      return { text: "PLACED · NO ONE CAN REACH IT", tone: "bad" };
     }
   }
 
@@ -172,15 +186,20 @@ function headline(prev: WorldSnapshot, next: WorldSnapshot, c: Changes): Reactio
   return null;
 }
 
+function servedBy(s: WorldSnapshot, facilityId: string): boolean {
+  return (s.service_routes ?? []).some((r) => r.reachable && r.facility_id === facilityId);
+}
+
 function pieceLabel(next: WorldSnapshot, sites: Map<string, { edge_id?: string }>, c: Changes): ReactionSet["pieceLabel"] {
   const t = c.added[0];
   if (!t) return null;
+  const verb = c.moved.some((m) => m.id === t.id) ? "MOVE CONFIRMED" : "PLACEMENT ACCEPTED";
   if (t.type === "bridge") {
     const edge = t.site_id ? sites.get(t.site_id)?.edge_id : undefined;
-    const connected = !!edge && c.restoredEdges.includes(edge);
-    return { uv: t.board_uv, text: connected ? ACTIVE_LABEL.bridge! : "BRIDGE PLACED", tone: connected ? "good" : "info" };
+    const connected = !!edge && !next.edges.find((e) => e.id === edge)?.blocked;
+    return { uv: t.board_uv, text: verb, tone: connected ? "good" : "info" };
   }
   const f = next.facilities.find((x) => x.id === t.id);
   const serving = !!f && (f.active ?? true) && f.reachable && (next.service_routes ?? []).some((r) => r.reachable && r.facility_id === t.id);
-  return { uv: t.board_uv, text: serving ? (ACTIVE_LABEL[t.type] ?? "ACTIVE") : "PLACED · ACCESS STILL LIMITED", tone: serving ? "good" : "bad" };
+  return { uv: t.board_uv, text: verb, tone: serving ? "good" : "bad" };
 }

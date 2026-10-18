@@ -352,7 +352,7 @@ async def suggest_action(request: SuggestRequest):
         # The ghost is now part of the authoritative snapshot; every screen shows it.
         await broadcast_snapshot()
     elif result['reason'] == 'unsupported_goal':
-        raise HTTPException(status_code=400, detail="goal_id must be needs_served, food, medical or refuge")
+        raise HTTPException(status_code=400, detail="goal_id must be needs_served, food, medical, refuge or access")
     return {"has_suggestion": result['accepted'], "suggestion": result.get('suggestion'),
             "world_version": result['world_version'], "rejection_reason": result['reason']}
 

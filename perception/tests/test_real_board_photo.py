@@ -67,7 +67,7 @@ def test_shipped_registration_registers_the_photo_as_is(photo):
     assert {m.marker_id: m.label for m in registration.markers.values()} == {
         10: "top_left", 11: "top_right", 13: "bottom_right", 12: "bottom_left"}
     assert all(m.rotation_deg == 0 for m in registration.markers.values())
-    assert not registration.verified  # positions are photo estimates until measured with a ruler
+    assert registration.verified  # centres measured by registering this photo to the printed artwork (scripts/register_print_artwork.py)
     registrar = BoardRegistrar(registration, min_markers=4)
     state = registrar.update(photo, now_ms=1)
     assert state.valid and state.markers_used == [10, 11, 12, 13] and state.transform_kind == "homography"

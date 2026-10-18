@@ -7,7 +7,7 @@ import type { ClockView } from "./clock";
 // BroadcastChannel is same-browser only: run /projector as a second window of the
 // operator laptop's browser (docs/RUN_OF_SHOW.md).
 
-export type ProjectorCommand = "calibrate" | "test" | "overlay" | "screen" | "exit-tools";
+export type ProjectorCommand = "calibrate" | "test" | "overlay" | "screen" | "align" | "narrative" | "exit-tools";
 
 export interface RejectionCue {
   id: string;

@@ -64,13 +64,21 @@ def load_registration(mapping_path: Path, markers_path: Path, scenario_id: str):
     result = {"ready": False, "reason": "BOARD REGISTRATION REQUIRED", "scenario_id": scenario_id}
     try:
         markers = json.loads(markers_path.read_text(encoding="utf-8"))
-        result.update(board=markers["board"], markers=markers["markers"], marker_size_mm=markers["aruco"]["marker_size_mm"])
+        sizes = markers["aruco"].get("marker_sizes_mm") or {}
+        # Projector keep-outs use the largest measured marker when sizes differ per marker.
+        mask_size = markers["aruco"].get("marker_size_mm") or (max(sizes.values()) if sizes else None)
+        result.update(board=markers["board"], markers=markers["markers"], marker_size_mm=mask_size)
         mapping = json.loads(mapping_path.read_text(encoding="utf-8"))
         if mapping.get("status") != "MEASURED" or mapping.get("scenario_id") != scenario_id:
             return result
+        # The projector only needs print<->world; camera actions additionally need measured markers.
+        mapping_matrix = _valid_mapping(mapping)
+        if mapping_matrix is None:
+            return result
+        result.update(mapping_ready=True, print_to_world=mapping_matrix, world_to_print=inverse(mapping_matrix))
         if markers.get("status") != "MEASURED" or not all(m.get("verified") for m in markers["markers"]):
             return result
-        if markers["board"].get("scenario_id") != scenario_id or not markers["aruco"].get("marker_size_mm"):
+        if markers["board"].get("scenario_id") != scenario_id or not mask_size:
             return result
         if any(not math.isfinite(float(markers["board"][k])) or markers["board"][k] <= 0 for k in ("width_mm", "height_mm")):
             return result
@@ -78,22 +86,27 @@ def load_registration(mapping_path: Path, markers_path: Path, scenario_id: str):
             return result
         if any(len(m["center_uv"]) != 2 or not all(math.isfinite(n) and 0 <= n <= 1 for n in m["center_uv"]) for m in markers["markers"]):
             return result
-        if not mapping.get("measured_by") or not mapping.get("measured_on") or not mapping.get("source"):
-            return result
-        matrix = [float(n) for n in mapping["print_to_world"]]
-        if len(matrix) != 9 or not all(math.isfinite(n) for n in matrix):
-            return result
-        inv = inverse(matrix)
-        # No projective horizon may cross the board.
-        corners = [(0, 0), (1, 0), (1, 1), (0, 1)]
-        weights = [matrix[6]*u + matrix[7]*v + matrix[8] for u, v in corners]
-        if min(weights) <= 0 <= max(weights):
-            return result
-        result.update(ready=True, reason=None, print_to_world=matrix, world_to_print=inv,
+        result.update(ready=True, reason=None,
                       measurement={k: mapping[k] for k in ("measured_by", "measured_on", "source")})
     except (OSError, KeyError, TypeError, ValueError, ZeroDivisionError):
         pass
     return result
+
+
+def _valid_mapping(mapping):
+    """The measured print->world matrix, or None if it is incomplete or degenerate."""
+    if not mapping.get("measured_by") or not mapping.get("measured_on") or not mapping.get("source"):
+        return None
+    matrix = [float(n) for n in mapping["print_to_world"]]
+    if len(matrix) != 9 or not all(math.isfinite(n) for n in matrix):
+        return None
+    inverse(matrix)
+    # No projective horizon may cross the board.
+    corners = [(0, 0), (1, 0), (1, 1), (0, 1)]
+    weights = [matrix[6]*u + matrix[7]*v + matrix[8] for u, v in corners]
+    if min(weights) <= 0 <= max(weights):
+        return None
+    return matrix
 
 
 class PhysicalAdapter:

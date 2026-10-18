@@ -6,7 +6,8 @@ import { TOKEN_SITE_KIND } from "../../types/contracts";
 import type { ScenarioGeometry } from "../../types/scenario";
 import { MARKER_LAYOUT_VERIFIED, MARKER_PROVENANCE, PRINT_WORLD_ALIGNMENT_NOTE } from "../../game/board";
 import { BOUNDARIES_S, MISSION_MS } from "../../game/clock";
-import { BoardSvg } from "../../game/overlays/BoardSvg";
+import { ProjectionScene } from "../../game/overlays/ProjectionScene";
+import { buildGuide } from "../../game/guide";
 import { PieceIcon } from "../../game/overlays/glyphs";
 import { buildResults } from "../../game/results";
 import { isMuted, setMuted } from "../../game/sound";
@@ -63,6 +64,7 @@ export function OperatorRoute() {
     [scenario, snapshot, beat.pieces, inputOpen, inMission],
   );
   const results = useMemo(() => (scenario && resultSnapshot ? buildResults(scenario, resultSnapshot) : null), [scenario, resultSnapshot]);
+  const guide = useMemo(() => buildGuide(view, snapshot), [view.phase, view.surge, view.elapsedMs >= 8000, snapshot]);
 
   // Keys 3–6 only in diagnostic/manual mode (spec: never active player instructions).
   useEffect(() => {
@@ -126,7 +128,10 @@ export function OperatorRoute() {
   };
 
   if (!tools) {
-    return <StartScreen mode={clock.mode} phase={phase} remainingMs={view.remainingMs} ready={liveData && connected} starting={busy} physicalInputReady={telemetry.camera.tone === "ok" && telemetry.registrationReady && telemetry.perceptron.tone === "ok" && alignmentReady} error={mission.startError ?? (!liveData ? scenarioError ?? healthError ?? null : null)} onStart={() => void mission.startGame()} />;
+    return <StartScreen mode={clock.mode} phase={phase} remainingMs={view.remainingMs} ready={liveData && connected} starting={busy} physicalInputReady={telemetry.camera.tone === "ok" && telemetry.registrationReady && telemetry.perceptron.tone === "ok" && alignmentReady} error={mission.startError ?? (!liveData ? scenarioError ?? healthError ?? null : null)} onStart={() => void mission.startGame()}
+      guide={liveData ? guide : null} results={finished ? results : null} fallbackBusy={!inputOpen}
+      onFallback={(o) => void (o.move_token_id ? mission.manual.move(o.move_token_id, o.site_id, o.board_uv) : mission.manual.place(o.piece, o.site_id, o.board_uv))}
+      onAskMatsya={() => void mission.askMatsya()} finalSnapshot={finished ? resultSnapshot : null} />;
   }
 
   return (
@@ -160,8 +165,8 @@ export function OperatorRoute() {
       {liveData && (scenario?.stage_count ?? 0) < 3 && (
         <div className="banner banner-warn">This scenario has one flood stage, activated at START. The 50-second surge will report FLOOD UPDATE UNAVAILABLE until the data owner supplies a second stage.</div>
       )}
-      {!alignmentReady && <div className="banner banner-warn">ArUco: {MARKER_PROVENANCE}. Measure registration and print bounds before physical play (docs/BOARD_REGISTRATION.md).</div>}
-      {!alignmentReady && <div className="banner banner-warn">{PRINT_WORLD_ALIGNMENT_NOTE}</div>}
+      {!world.registration?.world_to_print && <div className="banner banner-warn">{PRINT_WORLD_ALIGNMENT_NOTE}</div>}
+      {world.registration?.world_to_print && !alignmentReady && <div className="banner banner-warn">Projector mapping is measured from nepalmap.png, but camera markers are not: physical placement stays blocked. ArUco: {MARKER_PROVENANCE}.</div>}
 
       <main className="op-grid">
         <section className="card op-mission">
@@ -214,8 +219,8 @@ export function OperatorRoute() {
               </button>
             )}
             {running && (
-              <button className="btn btn-ghost" onClick={() => void mission.suggestBridge()} disabled={!inputOpen}>
-                SUGGEST BRIDGE
+              <button className="btn btn-ghost" onClick={() => void mission.askMatsya()} disabled={!inputOpen}>
+                MATSYA&apos;S GUIDANCE
               </button>
             )}
             {inMission && (
@@ -239,10 +244,11 @@ export function OperatorRoute() {
             Board <small>{inputOpen ? (moving ? `click a ${PIECE_NAME[moving.type]} pad to move ${moving.id}` : `click a pad: MANUAL PLACE ${PIECE_NAME[piece]}`) : "mirror of the projector (live snapshot)"}</small>
           </h2>
           {scenario ? (
-            <BoardSvg
+            <ProjectionScene
               scenario={scenario}
               snapshot={snapshot}
               model={model}
+              guide={guide}
               clock={view}
               reactions={world.reactions}
               rejections={mission.rejections}
@@ -250,6 +256,7 @@ export function OperatorRoute() {
               surface="screen"
               variant="operator"
               results={null}
+              registration={world.registration}
               hold={liveData ? null : LIVE_DATA_UNAVAILABLE}
               onSiteClick={inputOpen ? onSiteClick : undefined}
               highlightSite={placeSite || null}
@@ -379,6 +386,14 @@ export function OperatorRoute() {
                     TEST PROJECTOR
                   </button>
                 )}
+                {preStart && (
+                  <button className="btn" onClick={() => mission.command("align")} disabled={!projectorSeen} title="Projects nepalmap.png so keystone can be matched to the printed map">
+                    SHOW MAP TO ALIGN
+                  </button>
+                )}
+                <button className="btn" onClick={() => mission.command("narrative")} disabled={!projectorSeen} title="Show or hide Matsya's Guidance and the Boat of Hope on the projector">
+                  TOGGLE NARRATIVE LAYER
+                </button>
                 {paused && (
                   <button
                     className="btn"
@@ -474,8 +489,7 @@ function Legend() {
       <span className="lg lg-route">reachable route</span>
       <span className="lg lg-blocked">blocked / would-be route</span>
       <span className="lg lg-danger">affected population marker</span>
-      <span className="lg lg-pad">valid pad</span>
-      <span className="lg lg-ghost">suggested bridge</span>
+      <span className="lg lg-pad">glowing mission site</span>
       <span className="lg lg-pending">camera candidate (pending)</span>
     </div>
   );

@@ -10,3 +10,4 @@ export const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "
  * LIVE DATA UNAVAILABLE rather than rendered.
  */
 export const SCENARIO_ID = (import.meta.env.VITE_SCENARIO_ID as string | undefined) ?? "nepal_rasuwa_hot_v1";
+

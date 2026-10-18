@@ -5,6 +5,8 @@ import { openChannel, type ChannelMessage, type ProjectorCommand, type Rejection
 import { clockReducer, clockView, INITIAL_CLOCK, phaseOf, surgeActionId, surgeDue, inputOpen as clockInputOpen } from "../../game/clock";
 import { play, unlockAudio } from "../../game/sound";
 import { FLOOD_UPDATE_UNAVAILABLE, rejectionCopy } from "../../game/story";
+import { BOUNDARIES_S } from "../../game/clock";
+import { MATSYA_DELAY_MS } from "../../game/settings";
 
 // Operator-side mission controller: owns the 75-second clock, the one-time surge
 // action, digital START and the link to the projector window. Every world change it
@@ -119,6 +121,25 @@ export function useMission(world: LiveWorld) {
       else world.push("warning", `${FLOOD_UPDATE_UNAVAILABLE}: surge advance_stage ${r ? `rejected (${r.rejection_reason})` : "request failed"}`);
     });
   }, [clock, now, world]);
+
+  // Matsya's Guidance reuses the backend ghost planner (/plan/suggest, goal "access"). It is
+  // requested once per run when Mission 1 has gone MATSYA_DELAY_MS without a restored
+  // crossing; the fish appears only if the backend returns a real ghost_suggestion.
+  const guidanceAsked = useRef<string | null>(null);
+  useEffect(() => {
+    const m = world.snapshot?.mission;
+    const t = clock.mode === "running" ? now : null;
+    if (!clock.sessionId || t == null || guidanceAsked.current === clock.sessionId || !m || m.crossing_restored || world.snapshot?.ghost_suggestion) return;
+    const elapsed = clockView(clock, t).elapsedMs;
+    if (elapsed < BOUNDARIES_S.CROSSING * 1000 + MATSYA_DELAY_MS || elapsed >= BOUNDARIES_S.RESULTS * 1000) return;
+    guidanceAsked.current = clock.sessionId;
+    void world.suggest("access", "game_clock");
+  }, [clock, now, world]);
+
+  const askMatsya = useCallback(async () => {
+    if (!clockInputOpen(clockRef.current, performance.now()) || worldRef.current.status !== "live") return null;
+    return world.suggest("access", "operator_manual");
+  }, [world]);
 
   const command = useCallback((cmd: ProjectorCommand) => channel.current?.post({ t: "command", cmd }), []);
 
@@ -276,6 +297,7 @@ export function useMission(world: LiveWorld) {
     end: () => dispatch({ type: "end", now: performance.now() }),
     advanceFlood,
     suggestBridge,
+    askMatsya,
     manual,
     command,
     clearPending: clearAll,

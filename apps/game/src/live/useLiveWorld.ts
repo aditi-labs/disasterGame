@@ -331,10 +331,10 @@ export function useLiveWorld({ pollHealth = false }: { pollHealth?: boolean } = 
     [t, push, record],
   );
 
-  const suggest = useCallback(async () => {
+  const suggest = useCallback(async (goal = "needs_served", provenance = "operator_manual") => {
     try {
-      const r = await t.suggest("needs_served");
-      push(r.has_suggestion ? "accepted" : "rejected", `[operator_manual] suggest bridge → ${r.has_suggestion ? `site ${r.suggestion?.site_id}` : r.rejection_reason ?? "no_suggestion"}`);
+      const r = await t.suggest(goal);
+      push(r.has_suggestion ? "accepted" : "rejected", `[${provenance}] suggest bridge (${goal}) → ${r.has_suggestion ? `site ${r.suggestion?.site_id}` : r.rejection_reason ?? "no_suggestion"}`);
       return r;
     } catch (err) {
       push("warning", `POST /plan/suggest failed: ${(err as Error).message}`);
