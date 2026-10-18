@@ -8,18 +8,18 @@ FLOODSHIFT_MASTER_BUILD_SPEC section 2 (retain existing markers), 6.2–6.4, 8 (
 ## Current status: IDs and layout verified from a photo; positions still unmeasured
 
 On 2026-10-18 the team supplied a phone photo of the real printed map with its markers
-(`perception/tests/fixtures/real_board_photo_2026-10-18_portrait_1400.jpg`). Running the
+(`perception/tests/fixtures/real_board_photo_2026-10-18_upright_1400.jpg`, final landscape orientation). Running the
 perception detector on it verified the first four rows below; the rest are estimates
 from that single perspective photo and still need a ruler.
 
 | Item | Value in `perception/board_registration.json` | Verified on the physical board? | Source |
 |---|---|---|---|
 | Dictionary | 4X4 family; `DICT_4X4_50` configured (all 4X4 dictionaries decode these IDs) | **Yes** | Photo 2026-10-18, detector scan over every OpenCV dictionary |
-| Marker IDs | 10, 11, 12, 13 | **Yes** | Photo; ID 12 decodes only with the padded-frame retry because the paper edge touched the image border |
+| Marker IDs | 10, 11, 12, 13 | **Yes** | Photo; ID 12 (bottom-left) decodes only with the padded-frame retry because its paper touched the image border |
 | Corner layout (upright map) | TL = 10, TR = 11, **BR = 13, BL = 12** | **Yes** | Photo. The legacy audit assumed BR = 12, BL = 13: the real board has them swapped |
 | Printed rotation | 0 deg for all four in the upright frame | **Yes** | Photo: all four patterns share one rotation, equal to the map text's rotation |
-| Upright frame | map labels readable, river enters from the top; u right, v down, origin paper top-left | **Yes** (orientation) | Photo rotated 90 deg CCW; river/confluence shape matches the scenario's board-UV data orientation |
-| Marker centres (UV) | (0.065, 0.067), (0.944, 0.067), (0.944, 0.918), (0.065, 0.918) | **No, photo estimate** | Rectified photo; the bottom inset is least certain (paper edge cut off in the photo) |
+| Upright frame | the team's final landscape orientation: labels readable, river enters from the top; u right, v down, origin paper top-left | **Yes** (orientation) | Photo as supplied; river/confluence shape matches the scenario's board-UV data orientation |
+| Marker centres (UV) | 10 (0.065, 0.067), 11 (0.944, 0.067), 13 (0.944, 0.918), 12 (0.065, 0.918) | **No, photo estimate** | Rectified photo; the bottom inset is least certain (paper edge cut off at the photo border) |
 | Marker edge length | `null`; estimate 0.132 x paper height (~60 mm if the paper is 453 mm tall) | **No** | Rectified photo; set it after measuring to enable corner-based registration |
 | Board (paper) size | 594 x 453 mm **assumed** (aspect 0.763 measured, absolute size not) | **No** | The print is landscape; A-series width assumed only to give mm gates a scale |
 | Reprojection error | not measured live | – | – |

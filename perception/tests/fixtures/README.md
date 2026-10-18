@@ -13,6 +13,6 @@ physical board; recordings go in `assets/live_captures/` (gitignored) and are re
 
 | File | Provenance | What it is |
 |---|---|---|
-| `real_board_photo_2026-10-18_portrait_1400.jpg` | Phone photo supplied by the team on 2026-10-18 (original 3213x5712), downscaled to 1400 px tall | The **actual printed map with its four ArUco markers**, lying on carpet, photographed with the map rotated 90 deg clockwise (portrait). Perspective, not rectified. |
+| `real_board_photo_2026-10-18_upright_1400.jpg` | Phone photo supplied by the team on 2026-10-18 (original 5712x3213), downscaled to 1400 px wide | The **actual printed map with its four ArUco markers** in the team's FINAL orientation (landscape, labels readable, river entering from the top), lying on carpet. Perspective, not rectified. The same photo was first supplied turned 90 deg; the registration was derived in this upright frame from the start. |
 
 Verified from it (see `docs/BOARD_REGISTRATION.md`): 4X4 dictionary family, IDs 10/11/12/13, their corner layout, identical printed rotation. **Not** verified: millimetre positions, marker size, paper size.

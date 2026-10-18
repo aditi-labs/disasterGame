@@ -181,10 +181,10 @@ def make_detector(dictionary_name: str):
     params = cv2.aruco.DetectorParameters()
     params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
     params.cornerRefinementWinSize = 5
-    # The real markers are large (about 13 % of the print) and sit close to the paper edge;
-    # allow wide adaptive-threshold windows and nearby candidates.
+    # The real markers are large (about 13 % of the print): allow wide adaptive-threshold windows.
+    # (minMarkerDistanceRate is left at its default: lowering it produced duplicate decodes of
+    # one marker on the real photo; the edge case it was meant for is handled by the padded retry.)
     params.adaptiveThreshWinSizeMax = 73
-    params.minMarkerDistanceRate = 0.01
     return cv2.aruco.ArucoDetector(dictionary_by_name(dictionary_name), params)
 
 
@@ -209,18 +209,50 @@ def detect_markers(detector, frame: np.ndarray, expected_ids: set[int] | None = 
     frame restores it.  The retry costs nothing when every expected marker is found.
     """
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if frame.ndim == 3 else frame
-    found = _run_detector(detector, gray)
+    found = _dedupe(_run_detector(detector, gray))
     if expected_ids:
         missing = expected_ids - {d.marker_id for d in found}
         if missing:
             padded = cv2.copyMakeBorder(gray, EDGE_PAD_PX, EDGE_PAD_PX, EDGE_PAD_PX, EDGE_PAD_PX,
                                         cv2.BORDER_CONSTANT, value=255)
             seen = {d.marker_id for d in found}
-            for d in _run_detector(detector, padded, offset=EDGE_PAD_PX):
+            for d in _dedupe(_run_detector(detector, padded, offset=EDGE_PAD_PX)):
                 if d.marker_id in missing and d.marker_id not in seen:
                     found.append(d)
                     seen.add(d.marker_id)
     return found
+
+
+def _dedupe(detections: list[MarkerDetection]) -> list[MarkerDetection]:
+    """One detection per ID: keep the largest quad (a nested duplicate is always smaller)."""
+    best: dict[int, MarkerDetection] = {}
+    for d in detections:
+        cur = best.get(d.marker_id)
+        if cur is None or d.side_px > cur.side_px:
+            best[d.marker_id] = d
+    return list(best.values())
+
+
+SPURIOUS_SIDE_RATIO = 0.4
+
+
+def drop_spurious_unknowns(detections: list[MarkerDetection], registered_ids: set[int]) -> tuple[list[MarkerDetection], list[int]]:
+    """Unregistered IDs much smaller than the registered markers are texture false positives.
+
+    All real board markers are printed at one size; on the 2026-10-18 photo a 13 px blob in
+    the map print decoded as ID 37 next to 100 px markers.  Returns (kept, dropped_ids).
+    """
+    registered = [d for d in detections if d.marker_id in registered_ids]
+    if not registered:
+        return detections, []
+    median_side = float(np.median([d.side_px for d in registered]))
+    kept, dropped = [], []
+    for d in detections:
+        if d.marker_id not in registered_ids and d.side_px < SPURIOUS_SIDE_RATIO * median_side:
+            dropped.append(d.marker_id)
+        else:
+            kept.append(d)
+    return kept, sorted(set(dropped))
 
 
 def scan_dictionaries(frame: np.ndarray, names: list[str]) -> dict[str, list[int]]:
@@ -322,6 +354,7 @@ class BoardRegistrar:
         self._smoothed_quad: np.ndarray | None = None
         self._smoothed_ids: tuple[int, ...] = ()
         self.last_state: RegistrationState | None = None
+        self.last_spurious_ids: list[int] = []
 
     # -- correspondences
     def _correspondences(self, detections: list[MarkerDetection]) -> tuple[np.ndarray, np.ndarray, list[int], list[tuple[int, int]]]:
@@ -359,6 +392,7 @@ class BoardRegistrar:
                detections: list[MarkerDetection] | None = None) -> RegistrationState:
         now = self.clock() if now_ms is None else now_ms
         dets = self.detect(frame) if detections is None else detections
+        dets, self.last_spurious_ids = drop_spurious_unknowns(dets, set(self.registration.markers))
         unknown = sorted({d.marker_id for d in dets if d.marker_id not in self.registration.markers})
         src, dst, used, tags = self._correspondences(dets)
         used_sorted = sorted(set(used))
