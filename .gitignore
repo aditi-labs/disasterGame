@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# FloodShift perception (Dev 1)
+.venv/
+assets/live_captures/
+runs/
+*.jsonl
+.DS_Store

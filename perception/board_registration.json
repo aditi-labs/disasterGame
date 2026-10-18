@@ -1,0 +1,34 @@
+{
+  "schema": "floodshift.board_registration.v1",
+  "status": "UNVERIFIED_TENTATIVE",
+  "status_note": "Dictionary, IDs and positions below are the legacy audit's tentative values (floodshift- backend/calibration/board.py). They have NOT been measured on the current physical board. Run `python -m perception.service --calibrate` with the real camera over the real board: it lists every marker ID actually detected, auto-solves per-marker rotation, and writes a verified registration with measured reprojection error. Until then, the service reports registration_verified=false in its status.",
+  "board": {
+    "scenario_id": "nepal_rasuwa_hot_v1",
+    "width_mm": 420.0,
+    "height_mm": 420.0,
+    "uv_origin": "top_left",
+    "dimensions_source": "scenarios/nepal_rasuwa_hot_v1/data/scenario.json board.width_mm/height_mm (dimensions_provisional=true)"
+  },
+  "aruco": {
+    "dictionary": "DICT_4X4_100",
+    "candidate_dictionaries": ["DICT_4X4_100", "DICT_4X4_50", "DICT_4X4_250", "DICT_5X5_100", "DICT_6X6_250", "DICT_ARUCO_ORIGINAL"],
+    "marker_size_mm": null,
+    "marker_size_note": "null = physical marker edge length not yet measured; the solver then uses marker centres only and needs all four markers. Measure the printed black square edge in mm and set it to enable corner-based registration (16 points, partial occlusion tolerant)."
+  },
+  "markers": [
+    {"id": 10, "role": "board_corner", "label": "top_left", "center_uv": [0.04, 0.04], "rotation_deg": 0, "verified": false},
+    {"id": 11, "role": "board_corner", "label": "top_right", "center_uv": [0.96, 0.04], "rotation_deg": 0, "verified": false},
+    {"id": 12, "role": "board_corner", "label": "bottom_right", "center_uv": [0.96, 0.96], "rotation_deg": 0, "verified": false},
+    {"id": 13, "role": "board_corner", "label": "bottom_left", "center_uv": [0.04, 0.96], "rotation_deg": 0, "verified": false}
+  ],
+  "measured": {
+    "measured_on": null,
+    "measured_by": null,
+    "camera_source": null,
+    "frame_size": null,
+    "reprojection_rms_uv": null,
+    "reprojection_rms_px": null,
+    "detected_ids_all": null,
+    "notes": null
+  }
+}
