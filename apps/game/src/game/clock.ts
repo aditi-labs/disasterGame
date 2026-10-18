@@ -162,3 +162,12 @@ export function clockView(s: ClockState, now: number): ClockView {
 }
 
 export const IDLE_VIEW: ClockView = clockView(INITIAL_CLOCK, 0);
+
+/** A missing operator heartbeat freezes at the last extrapolated time, never rewinds. */
+export const CLOCK_STALE_MS = 3000;
+export function extrapolateClock(view: ClockView, receivedAt: number, now: number): ClockView {
+  if (view.mode !== "running") return view;
+  const age = Math.min(CLOCK_STALE_MS, Math.max(0, now - receivedAt));
+  const elapsedMs = Math.min(MISSION_MS, view.elapsedMs + age);
+  return { ...view, elapsedMs, remainingMs: MISSION_MS - elapsedMs, phase: phaseAt(elapsedMs) };
+}

@@ -1,0 +1,674 @@
+{
+  "kind": "floodshift.ui.live-test",
+  "verified_at": "2026-10-18T11:35:50.989Z",
+  "scenario_id": "nepal_rasuwa_hot_v1",
+  "execution": "React test renderer + real HTTP/WebSocket/BroadcastChannel + real monotonic 75-second clock",
+  "browser_visual_check": "NOT RUN: no browser session available",
+  "physical_board_check": "NOT RUN",
+  "assertions": [
+    "both routes mounted",
+    "digital START and two population records",
+    "pause/resume",
+    "manual bridge place/move/remove/retry",
+    "duplicate placement rejected",
+    "three facilities accepted",
+    "exactly one timed surge rejected last_stage",
+    "input closed at 70s",
+    "finished at 75s",
+    "backend-derived results",
+    "replay clears world"
+  ],
+  "frames": [
+    {
+      "label": "digital_start_with_both_population_records",
+      "at": "2026-10-18T11:34:35.388Z",
+      "elapsed_ms": 0,
+      "phase": "WARNING",
+      "projector_phase": "WARNING",
+      "world_version": 4,
+      "projector_world_version": 4,
+      "simulation_stage": 1,
+      "surge": "not_due",
+      "syncing": false,
+      "metrics": {
+        "people_reachable_for_medical": 0,
+        "people_reachable_for_food": 0,
+        "people_reachable_for_shelter": 0,
+        "unmet_food_model": 16,
+        "unmet_medical_model": 4,
+        "unmet_refuge_model": 16,
+        "blocked_roads": 3,
+        "resource_spent": 0,
+        "reachable_communities": 1,
+        "road_access_fraction": 0.8333333333333334
+      },
+      "token_sites": [
+        {
+          "type": "person",
+          "site": "people_east",
+          "source": "manual"
+        },
+        {
+          "type": "person",
+          "site": "people_west",
+          "source": "manual"
+        },
+        {
+          "type": "disaster_start",
+          "site": "start_pad",
+          "source": "manual"
+        }
+      ],
+      "open_routes": 0,
+      "blocked_roads": 3
+    },
+    {
+      "label": "crossing_10s",
+      "at": "2026-10-18T11:34:45.849Z",
+      "elapsed_ms": 10061.6509,
+      "phase": "CROSSING",
+      "projector_phase": "CROSSING",
+      "world_version": 4,
+      "projector_world_version": 4,
+      "simulation_stage": 1,
+      "surge": "not_due",
+      "syncing": false,
+      "metrics": {
+        "people_reachable_for_medical": 0,
+        "people_reachable_for_food": 0,
+        "people_reachable_for_shelter": 0,
+        "unmet_food_model": 16,
+        "unmet_medical_model": 4,
+        "unmet_refuge_model": 16,
+        "blocked_roads": 3,
+        "resource_spent": 0,
+        "reachable_communities": 1,
+        "road_access_fraction": 0.8333333333333334
+      },
+      "token_sites": [
+        {
+          "type": "person",
+          "site": "people_east",
+          "source": "manual"
+        },
+        {
+          "type": "person",
+          "site": "people_west",
+          "source": "manual"
+        },
+        {
+          "type": "disaster_start",
+          "site": "start_pad",
+          "source": "manual"
+        }
+      ],
+      "open_routes": 0,
+      "blocked_roads": 3
+    },
+    {
+      "label": "bridge_accepted",
+      "at": "2026-10-18T11:34:45.998Z",
+      "elapsed_ms": 10195.6905,
+      "phase": "CROSSING",
+      "projector_phase": "CROSSING",
+      "world_version": 5,
+      "projector_world_version": 5,
+      "simulation_stage": 1,
+      "surge": "not_due",
+      "syncing": false,
+      "metrics": {
+        "people_reachable_for_medical": 0,
+        "people_reachable_for_food": 0,
+        "people_reachable_for_shelter": 0,
+        "unmet_food_model": 16,
+        "unmet_medical_model": 4,
+        "unmet_refuge_model": 16,
+        "blocked_roads": 2,
+        "resource_spent": 2,
+        "reachable_communities": 2,
+        "road_access_fraction": 0.8888888888888888
+      },
+      "token_sites": [
+        {
+          "type": "bridge",
+          "site": "crossing_east",
+          "source": "manual"
+        },
+        {
+          "type": "person",
+          "site": "people_east",
+          "source": "manual"
+        },
+        {
+          "type": "person",
+          "site": "people_west",
+          "source": "manual"
+        },
+        {
+          "type": "disaster_start",
+          "site": "start_pad",
+          "source": "manual"
+        }
+      ],
+      "open_routes": 0,
+      "blocked_roads": 2
+    },
+    {
+      "label": "bridge_moved",
+      "at": "2026-10-18T11:34:46.192Z",
+      "elapsed_ms": 10414.694500000001,
+      "phase": "CROSSING",
+      "projector_phase": "CROSSING",
+      "world_version": 6,
+      "projector_world_version": 5,
+      "simulation_stage": 1,
+      "surge": "not_due",
+      "syncing": false,
+      "metrics": {
+        "people_reachable_for_medical": 0,
+        "people_reachable_for_food": 0,
+        "people_reachable_for_shelter": 0,
+        "unmet_food_model": 16,
+        "unmet_medical_model": 4,
+        "unmet_refuge_model": 16,
+        "blocked_roads": 2,
+        "resource_spent": 2,
+        "reachable_communities": 1,
+        "road_access_fraction": 0.8888888888888888
+      },
+      "token_sites": [
+        {
+          "type": "bridge",
+          "site": "crossing_west",
+          "source": "manual"
+        },
+        {
+          "type": "person",
+          "site": "people_east",
+          "source": "manual"
+        },
+        {
+          "type": "person",
+          "site": "people_west",
+          "source": "manual"
+        },
+        {
+          "type": "disaster_start",
+          "site": "start_pad",
+          "source": "manual"
+        }
+      ],
+      "open_routes": 0,
+      "blocked_roads": 2
+    },
+    {
+      "label": "retry_after_move_and_remove_with_duplicate_rejected",
+      "at": "2026-10-18T11:34:46.868Z",
+      "elapsed_ms": 11089.2718,
+      "phase": "CROSSING",
+      "projector_phase": "CROSSING",
+      "world_version": 8,
+      "projector_world_version": 8,
+      "simulation_stage": 1,
+      "surge": "not_due",
+      "syncing": false,
+      "metrics": {
+        "people_reachable_for_medical": 0,
+        "people_reachable_for_food": 0,
+        "people_reachable_for_shelter": 0,
+        "unmet_food_model": 16,
+        "unmet_medical_model": 4,
+        "unmet_refuge_model": 16,
+        "blocked_roads": 2,
+        "resource_spent": 2,
+        "reachable_communities": 2,
+        "road_access_fraction": 0.8888888888888888
+      },
+      "token_sites": [
+        {
+          "type": "bridge",
+          "site": "crossing_east",
+          "source": "manual"
+        },
+        {
+          "type": "person",
+          "site": "people_east",
+          "source": "manual"
+        },
+        {
+          "type": "person",
+          "site": "people_west",
+          "source": "manual"
+        },
+        {
+          "type": "disaster_start",
+          "site": "start_pad",
+          "source": "manual"
+        }
+      ],
+      "open_routes": 0,
+      "blocked_roads": 2
+    },
+    {
+      "label": "relief_services_accepted",
+      "at": "2026-10-18T11:35:06.643Z",
+      "elapsed_ms": 30879.8693,
+      "phase": "RELIEF",
+      "projector_phase": "RELIEF",
+      "world_version": 11,
+      "projector_world_version": 11,
+      "simulation_stage": 1,
+      "surge": "not_due",
+      "syncing": false,
+      "metrics": {
+        "people_reachable_for_medical": 16,
+        "people_reachable_for_food": 16,
+        "people_reachable_for_shelter": 16,
+        "unmet_food_model": 6,
+        "unmet_medical_model": 1,
+        "unmet_refuge_model": 6,
+        "blocked_roads": 2,
+        "resource_spent": 5,
+        "reachable_communities": 2,
+        "road_access_fraction": 0.8888888888888888
+      },
+      "token_sites": [
+        {
+          "type": "bridge",
+          "site": "crossing_east",
+          "source": "manual"
+        },
+        {
+          "type": "food_shelter",
+          "site": "food_site_west",
+          "source": "manual"
+        },
+        {
+          "type": "hospital",
+          "site": "medical_site_west",
+          "source": "manual"
+        },
+        {
+          "type": "shelter",
+          "site": "shelter_site_west",
+          "source": "manual"
+        },
+        {
+          "type": "person",
+          "site": "people_east",
+          "source": "manual"
+        },
+        {
+          "type": "person",
+          "site": "people_west",
+          "source": "manual"
+        },
+        {
+          "type": "disaster_start",
+          "site": "start_pad",
+          "source": "manual"
+        }
+      ],
+      "open_routes": 11,
+      "blocked_roads": 2
+    },
+    {
+      "label": "surge_50s_truthful_last_stage_failure",
+      "at": "2026-10-18T11:35:25.914Z",
+      "elapsed_ms": 50082.157999999996,
+      "phase": "SURGE",
+      "projector_phase": "SURGE",
+      "world_version": 11,
+      "projector_world_version": 11,
+      "simulation_stage": 1,
+      "surge": "failed",
+      "syncing": false,
+      "metrics": {
+        "people_reachable_for_medical": 16,
+        "people_reachable_for_food": 16,
+        "people_reachable_for_shelter": 16,
+        "unmet_food_model": 6,
+        "unmet_medical_model": 1,
+        "unmet_refuge_model": 6,
+        "blocked_roads": 2,
+        "resource_spent": 5,
+        "reachable_communities": 2,
+        "road_access_fraction": 0.8888888888888888
+      },
+      "token_sites": [
+        {
+          "type": "bridge",
+          "site": "crossing_east",
+          "source": "manual"
+        },
+        {
+          "type": "food_shelter",
+          "site": "food_site_west",
+          "source": "manual"
+        },
+        {
+          "type": "hospital",
+          "site": "medical_site_west",
+          "source": "manual"
+        },
+        {
+          "type": "shelter",
+          "site": "shelter_site_west",
+          "source": "manual"
+        },
+        {
+          "type": "person",
+          "site": "people_east",
+          "source": "manual"
+        },
+        {
+          "type": "person",
+          "site": "people_west",
+          "source": "manual"
+        },
+        {
+          "type": "disaster_start",
+          "site": "start_pad",
+          "source": "manual"
+        }
+      ],
+      "open_routes": 11,
+      "blocked_roads": 2
+    },
+    {
+      "label": "results_70s",
+      "at": "2026-10-18T11:35:45.835Z",
+      "elapsed_ms": 70018.75300000001,
+      "phase": "RESULTS",
+      "projector_phase": "RESULTS",
+      "world_version": 11,
+      "projector_world_version": 11,
+      "simulation_stage": 1,
+      "surge": "failed",
+      "syncing": false,
+      "metrics": {
+        "people_reachable_for_medical": 16,
+        "people_reachable_for_food": 16,
+        "people_reachable_for_shelter": 16,
+        "unmet_food_model": 6,
+        "unmet_medical_model": 1,
+        "unmet_refuge_model": 6,
+        "blocked_roads": 2,
+        "resource_spent": 5,
+        "reachable_communities": 2,
+        "road_access_fraction": 0.8888888888888888
+      },
+      "token_sites": [
+        {
+          "type": "bridge",
+          "site": "crossing_east",
+          "source": "manual"
+        },
+        {
+          "type": "food_shelter",
+          "site": "food_site_west",
+          "source": "manual"
+        },
+        {
+          "type": "hospital",
+          "site": "medical_site_west",
+          "source": "manual"
+        },
+        {
+          "type": "shelter",
+          "site": "shelter_site_west",
+          "source": "manual"
+        },
+        {
+          "type": "person",
+          "site": "people_east",
+          "source": "manual"
+        },
+        {
+          "type": "person",
+          "site": "people_west",
+          "source": "manual"
+        },
+        {
+          "type": "disaster_start",
+          "site": "start_pad",
+          "source": "manual"
+        }
+      ],
+      "open_routes": 11,
+      "blocked_roads": 2
+    },
+    {
+      "label": "finished_75s",
+      "at": "2026-10-18T11:35:50.879Z",
+      "elapsed_ms": 75000,
+      "phase": "RESULTS",
+      "projector_phase": "RESULTS",
+      "world_version": 11,
+      "projector_world_version": 11,
+      "simulation_stage": 1,
+      "surge": "failed",
+      "syncing": false,
+      "metrics": {
+        "people_reachable_for_medical": 16,
+        "people_reachable_for_food": 16,
+        "people_reachable_for_shelter": 16,
+        "unmet_food_model": 6,
+        "unmet_medical_model": 1,
+        "unmet_refuge_model": 6,
+        "blocked_roads": 2,
+        "resource_spent": 5,
+        "reachable_communities": 2,
+        "road_access_fraction": 0.8888888888888888
+      },
+      "token_sites": [
+        {
+          "type": "bridge",
+          "site": "crossing_east",
+          "source": "manual"
+        },
+        {
+          "type": "food_shelter",
+          "site": "food_site_west",
+          "source": "manual"
+        },
+        {
+          "type": "hospital",
+          "site": "medical_site_west",
+          "source": "manual"
+        },
+        {
+          "type": "shelter",
+          "site": "shelter_site_west",
+          "source": "manual"
+        },
+        {
+          "type": "person",
+          "site": "people_east",
+          "source": "manual"
+        },
+        {
+          "type": "person",
+          "site": "people_west",
+          "source": "manual"
+        },
+        {
+          "type": "disaster_start",
+          "site": "start_pad",
+          "source": "manual"
+        }
+      ],
+      "open_routes": 11,
+      "blocked_roads": 2
+    },
+    {
+      "label": "replay_reset_confirmed",
+      "at": "2026-10-18T11:35:50.989Z",
+      "elapsed_ms": 0,
+      "phase": "IDLE",
+      "projector_phase": "IDLE",
+      "world_version": 12,
+      "projector_world_version": 12,
+      "simulation_stage": 0,
+      "surge": "not_due",
+      "syncing": false,
+      "metrics": {
+        "people_reachable_for_medical": 0,
+        "people_reachable_for_food": 0,
+        "people_reachable_for_shelter": 0,
+        "unmet_food_model": 0,
+        "unmet_medical_model": 0,
+        "unmet_refuge_model": 0,
+        "blocked_roads": 0,
+        "resource_spent": 0,
+        "reachable_communities": 0,
+        "road_access_fraction": 1
+      },
+      "token_sites": [],
+      "open_routes": 0,
+      "blocked_roads": 0
+    }
+  ],
+  "websocket_snapshots": [
+    {
+      "at": "2026-10-18T11:34:35.198Z",
+      "version": 0,
+      "phase": "ready",
+      "stage": 0
+    },
+    {
+      "at": "2026-10-18T11:34:35.208Z",
+      "version": 1,
+      "phase": "ready",
+      "stage": 0
+    },
+    {
+      "at": "2026-10-18T11:34:35.255Z",
+      "version": 2,
+      "phase": "disaster_active",
+      "stage": 1
+    },
+    {
+      "at": "2026-10-18T11:34:35.286Z",
+      "version": 3,
+      "phase": "disaster_active",
+      "stage": 1
+    },
+    {
+      "at": "2026-10-18T11:34:35.368Z",
+      "version": 4,
+      "phase": "disaster_active",
+      "stage": 1
+    },
+    {
+      "at": "2026-10-18T11:34:45.986Z",
+      "version": 5,
+      "phase": "disaster_active",
+      "stage": 1
+    },
+    {
+      "at": "2026-10-18T11:34:46.236Z",
+      "version": 6,
+      "phase": "disaster_active",
+      "stage": 1
+    },
+    {
+      "at": "2026-10-18T11:34:46.360Z",
+      "version": 7,
+      "phase": "disaster_active",
+      "stage": 1
+    },
+    {
+      "at": "2026-10-18T11:34:46.770Z",
+      "version": 8,
+      "phase": "disaster_active",
+      "stage": 1
+    },
+    {
+      "at": "2026-10-18T11:35:06.007Z",
+      "version": 9,
+      "phase": "disaster_active",
+      "stage": 1
+    },
+    {
+      "at": "2026-10-18T11:35:06.243Z",
+      "version": 10,
+      "phase": "disaster_active",
+      "stage": 1
+    },
+    {
+      "at": "2026-10-18T11:35:06.565Z",
+      "version": 11,
+      "phase": "disaster_active",
+      "stage": 1
+    },
+    {
+      "at": "2026-10-18T11:35:50.925Z",
+      "version": 12,
+      "phase": "ready",
+      "stage": 0
+    }
+  ],
+  "final_results": {
+    "headline": "RESPONSE COMPLETE",
+    "rows": [
+      {
+        "id": "refuge_access",
+        "label": "POPULATION WITH REFUGE ACCESS",
+        "value": "16 / 16",
+        "detail": "model people",
+        "tone": "good"
+      },
+      {
+        "id": "food_met",
+        "label": "FOOD NEEDS MET",
+        "value": "10 / 16",
+        "detail": "model need units"
+      },
+      {
+        "id": "medical_met",
+        "label": "MEDICAL NEEDS MET",
+        "value": "3 / 4",
+        "detail": "model need units"
+      },
+      {
+        "id": "routes_restored",
+        "label": "CROSSINGS / ROUTES RESTORED",
+        "value": "1",
+        "detail": "crossing(s) carrying a reachable route · 1 community(ies) reconnected vs no response",
+        "tone": "good"
+      },
+      {
+        "id": "baseline_change",
+        "label": "CHANGE VS. NO-RESPONSE BASELINE",
+        "value": "−23",
+        "detail": "unmet need units: 36 with no response → 13 now",
+        "tone": "good"
+      },
+      {
+        "id": "unmet_remaining",
+        "label": "UNMET NEEDS REMAINING",
+        "value": "13 / 36",
+        "detail": "model need units",
+        "tone": "bad"
+      }
+    ],
+    "score": {
+      "value": 419,
+      "label": "Game score — compares strategies in this educational model; not a real outcome metric"
+    },
+    "unresolved": [
+      "6 food need units remain unmet — facility capacity is exhausted",
+      "1 medical need units remain unmet — facility capacity is exhausted",
+      "6 refuge need units remain unmet — facility capacity is exhausted"
+    ],
+    "improved": [
+      "Temporary bridge (crossing_east): 2 food, 1 medical, 2 refuge, 1 community reconnected need units served",
+      "Food & water station (food_site_west): 10 food need units served",
+      "Hospital (medical_site_west): 3 medical need units served",
+      "Shelter (shelter_site_west): 10 refuge need units served"
+    ],
+    "unit": "model people",
+    "empty": false
+  }
+}

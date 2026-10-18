@@ -30,6 +30,8 @@ export interface BoardSvgProps {
   surface: "overlay" | "screen";
   variant: "projector" | "operator";
   results: Results | null;
+  resultsSyncing?: boolean;
+  connectionLost?: boolean;
   /** Neutral hold-state text (no numbers): LIVE DATA UNAVAILABLE etc. */
   hold?: string | null;
   testPattern?: boolean;
@@ -67,7 +69,7 @@ export function BoardSvg(props: BoardSvgProps) {
   const H = BOARD_HEIGHT;
 
   return (
-    <svg className={`board board-${surface} board-${variant}`} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label="FLOODSHIFT projected board">
+    <svg className={`board board-${surface} board-${variant}`} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" role={onSiteClick ? "group" : "img"} aria-label="FLOODSHIFT projected board">
       <defs>
         <pattern id="hatch-danger" width={7} height={7} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
           <line x1={0} y1={0} x2={0} y2={7} stroke={PALETTE.dangerHatch} strokeWidth={1.2} opacity={0.75} />
@@ -249,7 +251,10 @@ export function BoardSvg(props: BoardSvgProps) {
       {!compact && <Hud phase={phase} clock={clock} headline={latest?.headline ?? null} headlineKey={latest?.key ?? ""} />}
 
       {/* 13 · Results: map dims, real snapshot fields only. */}
-      {phase === "RESULTS" && results && !compact && <ResultsCard results={results} />}
+      {phase === "RESULTS" && results && !compact && <ResultsCard results={results} syncing={props.resultsSyncing} />}
+      {props.connectionLost && !hold && !compact && (
+        <text x={W / 2} y={H - 60} className="hold-text">CONNECTION LOST · LAST CONFIRMED STATE</text>
+      )}
 
       {/* 14 · Hold state when live data is missing: no numbers, no map consequences. */}
       {hold && (
@@ -296,7 +301,7 @@ export function BoardSvg(props: BoardSvgProps) {
             .map((s) => {
               const c = S(s.board_uv);
               return (
-                <circle key={s.id} cx={c.x} cy={c.y} r={24} className={`site-hit ${highlightSite === s.id ? "selected" : ""}`} onClick={() => onSiteClick(s.id)}>
+                <circle key={s.id} cx={c.x} cy={c.y} r={24} role="button" tabIndex={0} aria-label={`${s.label} (${s.id})`} className={`site-hit ${highlightSite === s.id ? "selected" : ""}`} onClick={() => onSiteClick(s.id)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSiteClick(s.id); } }}>
                   <title>{`${s.label} (${s.id})`}</title>
                 </circle>
               );
@@ -505,7 +510,7 @@ function FishCurrent({ y }: { y: number }) {
   );
 }
 
-function ResultsCard({ results }: { results: Results }) {
+function ResultsCard({ results, syncing }: { results: Results; syncing?: boolean }) {
   const W = BOARD_WIDTH;
   const H = BOARD_HEIGHT;
   const rows = results.rows;
@@ -518,7 +523,7 @@ function ResultsCard({ results }: { results: Results }) {
       <rect width={W} height={H} fill="#000" opacity={0.42} />
       <rect x={x} y={y} width={cardW} height={cardH} rx={6} className="results-card" />
       <text x={W / 2} y={y + 44} className="results-head">
-        {results.headline}
+        {syncing ? "SYNCING RESULTS" : results.headline}
       </text>
       {results.empty ? (
         <text x={W / 2} y={y + 84} className="hud-line">

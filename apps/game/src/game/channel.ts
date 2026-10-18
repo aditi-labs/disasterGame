@@ -17,7 +17,7 @@ export interface RejectionCue {
 }
 
 export type ChannelMessage =
-  | { t: "clock"; view: ClockView; sentAt: number }
+  | { t: "clock"; view: ClockView; sentAt: number; syncing: boolean }
   | { t: "reject"; cue: RejectionCue }
   | { t: "command"; cmd: ProjectorCommand }
   | { t: "clear-pending"; tokenIds: string[] }

@@ -56,6 +56,7 @@ export function OperatorRoute() {
   const preStart = clock.mode === "idle" || clock.mode === "intro";
   const liveData = !!scenario && !!snapshot && !scenarioMismatch && !healthError;
   const connected = status === "live";
+  const busy = mission.starting || world.inFlight > 0;
 
   const model = useMemo(
     () => (scenario && snapshot ? buildBoardModel(scenario, snapshot, inMission ? beat.pieces : [], inputOpen) : null),
@@ -149,6 +150,9 @@ export function OperatorRoute() {
       {liveData && !connected && status !== "connecting" && (
         <div className="banner banner-bad">{CONNECTION_LOST} — the projector holds the last authoritative snapshot (v{snapshot?.world_version}). Actions will fail until the WebSocket reconnects.</div>
       )}
+      {liveData && (scenario?.stage_count ?? 0) < 3 && (
+        <div className="banner banner-warn">This scenario has one flood stage, activated at START. The 50-second surge will report FLOOD UPDATE UNAVAILABLE until the data owner supplies a second stage.</div>
+      )}
       {!MARKERS_VERIFIED && <div className="banner banner-warn">ArUco keep-outs use {MARKER_PROVENANCE}. Lane B must confirm ids/positions on the physical board (docs/BOARD_REGISTRATION.md).</div>}
 
       <main className="op-grid">
@@ -187,7 +191,7 @@ export function OperatorRoute() {
               </button>
             )}
             {preStart && (
-              <button className="btn btn-primary" onClick={() => void mission.startGame()} disabled={!liveData || !connected || mission.starting}>
+              <button className="btn btn-primary" onClick={() => void mission.startGame()} disabled={!liveData || !connected || busy}>
                 {mission.starting ? "STARTING…" : "START GAME"}
               </button>
             )}
@@ -217,11 +221,11 @@ export function OperatorRoute() {
               </button>
             )}
             {finished && (
-              <button className="btn btn-primary" onClick={() => void mission.resetGame()}>
+              <button className="btn btn-primary" onClick={() => void mission.resetGame()} disabled={busy || !connected}>
                 REPLAY
               </button>
             )}
-            <button className="btn btn-danger" onClick={() => window.confirm("RESET GAME: authoritative reset of the world, clock, pending detections and effects. Scenario data is preserved.") && void mission.resetGame()}>
+            <button className="btn btn-danger" disabled={busy || !connected} onClick={() => window.confirm("RESET GAME: authoritative reset of the world, clock, pending detections and effects. Scenario data is preserved.") && void mission.resetGame()}>
               RESET GAME
             </button>
           </div>
@@ -260,14 +264,14 @@ export function OperatorRoute() {
           <h3>MANUAL PLACE</h3>
           <div className="piece-row">
             {GAME_PIECES.map((p) => (
-              <button key={p} className={`btn btn-piece ${piece === p ? "active" : ""}`} onClick={() => setPiece(p)}>
+              <button key={p} className={`btn btn-piece ${piece === p ? "active" : ""}`} aria-pressed={piece === p} onClick={() => { setPiece(p); setPlaceSite(""); }}>
                 <PieceIcon type={p} size={14} /> {PIECE_NAME[p]} <em>×{snapshot?.token_inventory[p] ?? "–"}</em>
               </button>
             ))}
           </div>
           <div className="form-row">
-            <select value={placeSite} onChange={(e) => setPlaceSite(e.target.value)}>
-              <option value="">choose an allowed site…</option>
+            <select aria-label="Placement site" value={placeSite} onChange={(e) => setPlaceSite(e.target.value)}>
+              <option value="">choose a site for this piece…</option>
               {sitesFor(piece).map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.label} · {s.id}
@@ -280,7 +284,7 @@ export function OperatorRoute() {
               disabled={!inputOpen || !placeSite}
               onClick={() => {
                 const s = scenario?.sites.find((x) => x.id === placeSite);
-                if (s) void mission.manual.place(piece, s.id, s.board_uv);
+                if (s && s.kind === TOKEN_SITE_KIND[piece]) void mission.manual.place(piece, s.id, s.board_uv);
               }}
             >
               PLACE
@@ -289,7 +293,7 @@ export function OperatorRoute() {
 
           <h3>MANUAL MOVE</h3>
           <div className="form-row">
-            <select value={moveToken} onChange={(e) => setMoveToken(e.target.value)}>
+            <select aria-label="Piece to move" value={moveToken} onChange={(e) => { setMoveToken(e.target.value); setMoveSite(""); }}>
               <option value="">choose a placed piece…</option>
               {gamePieces.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -297,7 +301,7 @@ export function OperatorRoute() {
                 </option>
               ))}
             </select>
-            <select value={moveSite} onChange={(e) => setMoveSite(e.target.value)} disabled={!moving}>
+            <select aria-label="Destination site" value={moveSite} onChange={(e) => setMoveSite(e.target.value)} disabled={!moving}>
               <option value="">to site…</option>
               {moving && sitesFor(moving.type).filter((s) => s.id !== moving.site_id).map((s) => <option key={s.id} value={s.id}>{s.id}</option>)}
             </select>
@@ -403,7 +407,7 @@ export function OperatorRoute() {
         {(finished || phase === "RESULTS") && results && (
           <section className="card op-results">
             <h2>
-              Results <small>{world.inFlight > 0 ? `SYNCING — ${world.inFlight} action(s) still in flight` : `from committed snapshot v${snapshot?.world_version}`}</small>
+              Results <small role="status">{mission.resultsSyncing ? "SYNCING — waiting for action acknowledgments and the live snapshot" : `from committed snapshot v${snapshot?.world_version}`}</small>
             </h2>
             <ResultsPanel results={results} mission={mission} />
           </section>

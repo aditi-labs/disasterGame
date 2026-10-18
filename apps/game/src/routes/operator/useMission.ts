@@ -40,6 +40,12 @@ export function useMission(world: LiveWorld) {
   const surgeSent = useRef<string | null>(null);
   const clockRef = useRef(clock);
   clockRef.current = clock;
+  const worldRef = useRef(world);
+  worldRef.current = world;
+  const operationPending = useRef(false);
+  const resultsSyncing = world.inFlight > 0 || world.status !== "live" || (world.snapshot?.world_version ?? -1) < world.knownVersion();
+  const syncingRef = useRef(resultsSyncing);
+  syncingRef.current = resultsSyncing;
 
   useEffect(() => {
     const onMessage = (m: ChannelMessage) => {
@@ -61,12 +67,12 @@ export function useMission(world: LiveWorld) {
 
   // Broadcast the clock to the projector (on change and every 250 ms).
   useEffect(() => {
-    const id = window.setInterval(() => channel.current?.post({ t: "clock", view: clockView(clockRef.current, performance.now()), sentAt: Date.now() }), 250);
+    const id = window.setInterval(() => channel.current?.post({ t: "clock", view: clockView(clockRef.current, performance.now()), sentAt: Date.now(), syncing: syncingRef.current }), 250);
     return () => window.clearInterval(id);
   }, []);
   useEffect(() => {
-    channel.current?.post({ t: "clock", view: clockView(clock, performance.now()), sentAt: Date.now() });
-  }, [clock]);
+    channel.current?.post({ t: "clock", view: clockView(clock, performance.now()), sentAt: Date.now(), syncing: resultsSyncing });
+  }, [clock, resultsSyncing]);
 
   const phase = phaseOf(clock, now);
   const lastPhase = useRef(phase);
@@ -114,13 +120,15 @@ export function useMission(world: LiveWorld) {
    */
   const startGame = useCallback(async () => {
     const { scenario } = world;
+    if (operationPending.current || !["idle", "intro"].includes(clockRef.current.mode)) return;
     unlockAudio();
     setStartError(null);
     setNotice(null);
-    if (!scenario) return setStartError("No live scenario loaded.");
+    if (!scenario || world.status !== "live") return setStartError("Live scenario and world connection required.");
     const pad = scenario.sites.find((s) => s.kind === "control_start_pad");
     if (!pad) return setStartError("Scenario has no control_start_pad: digital START cannot satisfy the START-first rule.");
     setStarting(true);
+    operationPending.current = true;
     const sessionId = newSessionId();
     try {
       const reset = await world.reset("game_setup");
@@ -131,11 +139,13 @@ export function useMission(world: LiveWorld) {
       for (const site of scenario.sites.filter((s) => s.kind === "population_node")) {
         const r = await world.place("person", site.id, site.board_uv, `population-${site.id}`, "game_setup", `pop-${sessionId}-${site.id}`);
         if (r?.accepted) populated += 1;
-        else world.push("warning", `population ${site.id} not placed: ${r?.rejection_reason ?? "request failed"}`);
+        else throw new Error(`Population ${site.id} not placed: ${r?.rejection_reason ?? "request failed"}. Reset and retry START.`);
       }
       if (!populated) throw new Error("no scenario population record could be placed");
       surgeSent.current = null;
+      setRejections([]);
       clearAll();
+      command("exit-tools");
       dispatch({ type: "start", sessionId, now: performance.now() });
       setStartedAt(new Date().toISOString());
       play("bell");
@@ -143,32 +153,49 @@ export function useMission(world: LiveWorld) {
       setStartError((err as Error).message);
     } finally {
       setStarting(false);
+      operationPending.current = false;
     }
-  }, [world, clearAll]);
+  }, [world, clearAll, command]);
 
   const resetGame = useCallback(async () => {
+    if (operationPending.current || world.inFlight > 0) return null;
+    operationPending.current = true;
     const r = await world.reset("operator_manual");
+    operationPending.current = false;
+    if (!r?.reset) {
+      setNotice("RESET was not confirmed by the backend. Mission state retained; reconnect and retry.");
+      return r;
+    }
     dispatch({ type: "reset" });
     surgeSent.current = null;
+    setRejections([]);
+    setStartedAt(null);
+    setStartError(null);
     clearAll();
     command("exit-tools");
     setNotice(r?.reset ? null : "RESET was not confirmed by the backend.");
     return r;
   }, [world, clearAll, command]);
 
+  // Check monotonic time at the actual click, including the gap between timer renders.
+  const canAct = () => clockInputOpen(clockRef.current, performance.now()) && worldRef.current.status === "live" && worldRef.current.inFlight === 0;
+
   const manual = {
     place: async (type: TokenType, siteId: string, uv: UV) => {
+      if (!canAct()) return null;
       const r = await world.place(type, siteId, uv, `manual-${type}-${Date.now().toString(36)}`);
       cueResult(r, uv);
       if (r?.accepted) play("chime");
       return r;
     },
     move: async (tokenId: string, siteId: string, uv: UV) => {
+      if (!canAct()) return null;
       const r = await world.move(tokenId, siteId, uv);
       cueResult(r, uv);
       return r;
     },
     remove: async (tokenId: string, uv?: UV) => {
+      if (!canAct()) return null;
       const r = await world.remove(tokenId);
       cueResult(r, uv);
       return r;
@@ -176,6 +203,7 @@ export function useMission(world: LiveWorld) {
   };
 
   const advanceFlood = useCallback(async () => {
+    if (!canAct()) return null;
     const r = await world.advanceStage(undefined, "operator_manual");
     setNotice(r?.accepted ? null : `${FLOOD_UPDATE_UNAVAILABLE} (${r ? r.rejection_reason : "request failed"})`);
     if (r?.accepted) play("swell");
@@ -183,6 +211,7 @@ export function useMission(world: LiveWorld) {
   }, [world]);
 
   const suggestBridge = useCallback(async () => {
+    if (!canAct()) return null;
     const r = await world.suggest();
     setNotice(r?.has_suggestion ? null : "NO VALID SUGGESTION");
     return r;
@@ -193,7 +222,8 @@ export function useMission(world: LiveWorld) {
     now,
     phase,
     view: clockView(clock, now),
-    inputOpen: clockInputOpen(clock, now),
+    inputOpen: clockInputOpen(clock, now) && world.status === "live" && world.inFlight === 0,
+    resultsSyncing,
     projector,
     startError,
     starting,

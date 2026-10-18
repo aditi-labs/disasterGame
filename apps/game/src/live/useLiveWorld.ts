@@ -75,6 +75,7 @@ export function useLiveWorld({ pollHealth = false }: { pollHealth?: boolean } = 
   const snapRef = useRef<WorldSnapshot | null>(null);
   const scenarioRef = useRef<ScenarioGeometry | null>(null);
   const knownVersion = useRef(0);
+  const newConnection = useRef(true);
   const reacted = useRef(new Set<string>());
 
   const push = useCallback((kind: LogEntry["kind"], text: string) => {
@@ -130,18 +131,27 @@ export function useLiveWorld({ pollHealth = false }: { pollHealth?: boolean } = 
   useEffect(() => {
     const onEnvelope = (e: Envelope) => {
       // A new connection (possibly to a restarted server) restarts the sequence.
-      if (e.type === "server.hello") lastSeq.current = -Infinity;
+      if (e.type === "server.hello") {
+        lastSeq.current = -Infinity;
+        newConnection.current = true;
+      }
       if (typeof e.seq === "number" && e.seq > 0 && e.seq <= lastSeq.current) return;
       if (typeof e.seq === "number" && e.seq > 0) lastSeq.current = e.seq;
       switch (e.type) {
         case "world.snapshot": {
           const prev = snapRef.current;
-          if (prev && e.payload.branch_id === prev.branch_id && e.payload.world_version < prev.world_version && e.payload.world_version !== 0) return;
-          const restarted = prev && e.payload.world_version === 0 && prev.world_version > 0;
+          if (!newConnection.current && prev && e.payload.branch_id === prev.branch_id && e.payload.world_version < prev.world_version) return;
+          const restarted = newConnection.current && prev && e.payload.world_version < prev.world_version;
+          const freshConnection = newConnection.current;
+          newConnection.current = false;
           snapRef.current = e.payload;
-          knownVersion.current = restarted ? e.payload.world_version : Math.max(knownVersion.current, e.payload.world_version);
+          knownVersion.current = freshConnection ? e.payload.world_version : Math.max(knownVersion.current, e.payload.world_version);
           setSnapshot(e.payload);
-          if (!restarted) react(prev, e.payload);
+          if (restarted) {
+            reacted.current.clear();
+            setReactions([]);
+            setObservations(new Map());
+          } else react(prev, e.payload);
           break;
         }
         case "vision.status": {
@@ -279,6 +289,11 @@ export function useLiveWorld({ pollHealth = false }: { pollHealth?: boolean } = 
         knownVersion.current = Math.max(knownVersion.current, r.world_version);
         record({ at: nowUtc(), provenance, action: { type: "reset" }, accepted: r.reset, reason: r.reset ? null : "reset_rejected", versionBefore: before, versionAfter: r.world_version });
         push(r.reset ? "accepted" : "rejected", `[${provenance}] reset → world ${r.world_version}`);
+        if (r.reset) {
+          reacted.current.clear();
+          setReactions([]);
+          setObservations(new Map());
+        }
         return r;
       } catch (err) {
         push("warning", `POST /reset failed: ${(err as Error).message}`);

@@ -226,3 +226,6 @@ apps/game/dist/
 *.tsbuildinfo
 .env
 assets/live_captures/
+.runtime/
+.env.local
+.env.*.local

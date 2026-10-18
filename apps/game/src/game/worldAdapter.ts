@@ -149,14 +149,16 @@ export function buildBoardModel(
       };
     });
 
-  const facilities: FacilityMark[] = snapshot.facilities.map((f: Facility) => {
+  const facilities: FacilityMark[] = snapshot.facilities.flatMap((f: Facility) => {
     const token = snapshot.tokens.find((t) => t.id === f.id);
     const site = f.site_id ? sites.get(f.site_id) : undefined;
-    return {
+    const uv = token?.board_uv ?? site?.board_uv;
+    if (!uv) return [];
+    return [{
       tokenId: f.id,
       type: f.type,
       siteId: f.site_id ?? null,
-      uv: token?.board_uv ?? site?.board_uv ?? [0.5, 0.5],
+      uv,
       active: f.active ?? true,
       supplied: f.reachable,
       used: f.used_capacity_model,
@@ -164,7 +166,7 @@ export function buildBoardModel(
       full: f.capacity_model > 0 && f.used_capacity_model >= f.capacity_model,
       serving: routes.some((r) => r.reachable && r.facility_id === f.id),
       provenance: facilityProvenance(snapshot, f.id),
-    };
+    }];
   });
 
   const bridges: BridgeMark[] = snapshot.tokens

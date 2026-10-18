@@ -64,6 +64,7 @@ export function createLiveTransport(baseUrl: string): WorldTransport {
       let retry = 0;
       let staleTimer: number | undefined;
       let heartbeat: number | undefined;
+      let reconnectTimer: number | undefined;
 
       const markFresh = () => {
         window.clearTimeout(staleTimer);
@@ -72,20 +73,25 @@ export function createLiveTransport(baseUrl: string): WorldTransport {
       };
 
       const open = () => {
+        if (closed) return;
         onStatus("connecting");
-        ws = new WebSocket(wsUrl);
-        ws.onopen = async () => {
+        const socket = new WebSocket(wsUrl);
+        ws = socket;
+        socket.onopen = async () => {
+          if (closed || socket !== ws) return;
           retry = 0;
           markFresh();
-          heartbeat = window.setInterval(() => ws?.readyState === WebSocket.OPEN && ws.send("ping"), 5000);
+          heartbeat = window.setInterval(() => socket.readyState === WebSocket.OPEN && socket.send("ping"), 5000);
           // After any (re)connect, pull the current snapshot rather than trusting old state.
           try {
-            onEnvelope({ type: "world.snapshot", seq: -1, sent_at: nowUtc(), payload: await get<WorldSnapshot>("/world") });
+            const payload = await get<WorldSnapshot>("/world");
+            if (!closed && socket === ws && socket.readyState === WebSocket.OPEN) onEnvelope({ type: "world.snapshot", seq: -1, sent_at: nowUtc(), payload });
           } catch {
             /* the socket still delivers snapshots */
           }
         };
-        ws.onmessage = (ev) => {
+        socket.onmessage = (ev) => {
+          if (closed || socket !== ws) return;
           markFresh();
           try {
             onEnvelope(JSON.parse(ev.data) as Envelope);
@@ -93,20 +99,22 @@ export function createLiveTransport(baseUrl: string): WorldTransport {
             /* "pong" heartbeats are not JSON */
           }
         };
-        ws.onclose = () => {
+        socket.onclose = () => {
+          if (closed || socket !== ws) return;
+          window.clearTimeout(staleTimer);
           window.clearInterval(heartbeat);
-          if (closed) return;
           onStatus("offline");
           retry = Math.min(retry + 1, 5);
-          window.setTimeout(open, 500 * 2 ** retry);
+          reconnectTimer = window.setTimeout(open, 500 * 2 ** retry);
         };
-        ws.onerror = () => ws?.close();
+        socket.onerror = () => socket.close();
       };
 
       open();
       return () => {
         closed = true;
         window.clearTimeout(staleTimer);
+        window.clearTimeout(reconnectTimer);
         window.clearInterval(heartbeat);
         ws?.close();
       };

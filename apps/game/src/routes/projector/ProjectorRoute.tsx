@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLiveWorld } from "../../live/useLiveWorld";
 import { openChannel, type ChannelMessage, type RejectionCue } from "../../game/channel";
-import { FREEZE_AT_MS, IDLE_VIEW, MISSION_MS, phaseAt, type ClockView } from "../../game/clock";
+import { CLOCK_STALE_MS, extrapolateClock, FREEZE_AT_MS, IDLE_VIEW, type ClockView } from "../../game/clock";
 import { calibrationMatrix3d, DEFAULT_CALIBRATION, type Calibration } from "../../game/homography";
 import { BoardSvg } from "../../game/overlays/BoardSvg";
 import { buildResults } from "../../game/results";
@@ -16,8 +16,6 @@ import { buildBoardModel } from "../../game/worldAdapter";
 // 5 back to whole-image), shift ×10, 0 reset, Enter save.
 
 const CAL_KEY = "floodshift.game.projector.calibration.v2";
-/** Without a clock message for this long the operator window is gone: freeze, don't run on. */
-const CLOCK_STALE_MS = 3000;
 
 function loadCal(): Calibration {
   try {
@@ -36,15 +34,6 @@ function saveCal(c: Calibration) {
   }
 }
 
-/** Advance a received clock view by the time since it was sent, while it is fresh. */
-function extrapolate(view: ClockView, sentAt: number, now: number): ClockView {
-  if (view.mode !== "running") return view;
-  const age = now - sentAt;
-  if (age > CLOCK_STALE_MS) return view;
-  const elapsedMs = Math.min(MISSION_MS, view.elapsedMs + age);
-  return { ...view, elapsedMs, remainingMs: MISSION_MS - elapsedMs, phase: phaseAt(elapsedMs) };
-}
-
 export function ProjectorRoute() {
   const world = useLiveWorld();
   const params = new URLSearchParams(window.location.search);
@@ -53,7 +42,8 @@ export function ProjectorRoute() {
   const [testing, setTesting] = useState(false);
   const [corner, setCorner] = useState<number | null>(null);
   const [cal, setCal] = useState<Calibration>(loadCal);
-  const [clock, setClock] = useState<{ view: ClockView; sentAt: number }>({ view: IDLE_VIEW, sentAt: Date.now() });
+  const [clock, setClock] = useState<{ view: ClockView; sentAt: number }>({ view: IDLE_VIEW, sentAt: performance.now() });
+  const [syncing, setSyncing] = useState(false);
   const [rejections, setRejections] = useState<RejectionCue[]>([]);
   const [, setTick] = useState(0);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -67,7 +57,8 @@ export function ProjectorRoute() {
     const onMessage = (m: ChannelMessage) => {
       switch (m.t) {
         case "clock":
-          setClock({ view: m.view, sentAt: Date.now() });
+          setClock({ view: m.view, sentAt: performance.now() });
+          setSyncing(m.syncing);
           break;
         case "reject":
           setRejections((list) => [...list.filter((r) => r.until > Date.now()), m.cue]);
@@ -166,8 +157,9 @@ export function ProjectorRoute() {
   }, [calibrating, corner]);
 
   const { snapshot, scenario, scenarioError, scenarioMismatch, reactions, observations } = world;
-  const view = extrapolate(clock.view, clock.sentAt, Date.now());
-  const open = (view.mode === "running" || view.mode === "paused") && view.elapsedMs < FREEZE_AT_MS;
+  const view = extrapolateClock(clock.view, clock.sentAt, performance.now());
+  const clockStale = view.sessionId != null && performance.now() - clock.sentAt > CLOCK_STALE_MS;
+  const open = !clockStale && world.status === "live" && (view.mode === "running" || view.mode === "paused") && view.elapsedMs < FREEZE_AT_MS;
   const model = useMemo(
     () => (scenario && snapshot ? buildBoardModel(scenario, snapshot, BEATS[view.phase].pieces, open) : null),
     [scenario, snapshot, view.phase, open],
@@ -192,6 +184,8 @@ export function ProjectorRoute() {
             surface={overlay ? "overlay" : "screen"}
             variant="projector"
             results={results}
+            resultsSyncing={syncing || world.status !== "live" || clockStale}
+            connectionLost={world.status !== "live" || clockStale}
             hold={hold}
             testPattern={testing || calibrating}
           />

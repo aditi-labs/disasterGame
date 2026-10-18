@@ -97,6 +97,8 @@
 .btn-col { display:flex; flex-direction:column; gap:6px; margin-top:10px; } .btn-row,.piece-row,.form-row { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
 .btn { background:#1c2530; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:7px 10px; cursor:pointer; letter-spacing:.06em; }
 .btn:hover { border-color:#4a5a6a; } .btn:disabled { opacity:.4; cursor:not-allowed; } .btn.active { border-color:var(--ok); }
+button:focus-visible,select:focus-visible,a:focus-visible,.site-hit:focus-visible { outline:2px solid #b9d7ff; outline-offset:3px; }
+.site-hit:focus-visible { fill:rgba(185,215,255,.2); }
 .btn-primary { background:#163a30; border-color:#2f7a62; } .btn-danger { border-color:#6b2a33; color:#f3b2bb; } .btn-ghost { border-color:#5a4a8a; color:var(--ghost); } .btn-quiet { color:var(--muted); }
 .btn-sm { padding:2px 7px; font-size:11px; } .btn-piece em { color:var(--muted); font-style:normal; } .push-right { margin-left:auto; }
 select { background:#1c2530; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px; flex:1; min-width:0; }
@@ -113,3 +115,4 @@ table { width:100%; border-collapse:collapse; } td,th { text-align:left; padding
 .debug { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; } .debug pre { font-size:10px; max-height:240px; overflow:auto; background:#0b0f14; padding:6px; } .debug-frame { max-width:100%; }
 .map-empty { padding:40px; text-align:center; color:var(--muted); } .op-footer { padding:8px 16px; font-size:11px; color:var(--muted); border-top:1px solid var(--line); }
 .camera-cal ul { padding-left:18px; }
+@media (max-width:600px) { .op-header { align-items:flex-start; } .op-link { margin-left:0; } .op-grid { padding:8px; gap:8px; } .results-cols,.debug { grid-template-columns:1fr; } .results-table td { overflow-wrap:anywhere; } }
