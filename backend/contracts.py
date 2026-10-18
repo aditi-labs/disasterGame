@@ -262,6 +262,8 @@ class WorldSnapshot(BaseModel):
     routing_decision: dict | None = None  # reasoning bundle only: group evacuation plan
     # Game score/objectives/results computed by backend/world/game.py from this state.
     game: dict | None = None
+    # Mission guidance from backend/world/mission.py: helpful placements previewed by the reducer.
+    mission: dict | None = None
 
     # Prevention mode fields
     mode: Literal["prevention", "relief"] = "relief"

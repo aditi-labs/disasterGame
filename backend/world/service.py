@@ -12,6 +12,7 @@ from backend.planning.population_routes import plan_population_routes
 from backend.simulation.reachability import measure
 from backend.simulation.routing import route_minutes
 from backend.world.game import evaluate
+from backend.world.mission import mission_guide
 from backend.world.rules import SOURCES, RuleError, initial_state, reduce_action, require
 from backend.world.geometry import scenario_geometry
 from backend.world.scenarios import DEFAULT_BUNDLE, load_bundle, validate_bundle
@@ -78,6 +79,7 @@ class WorldService:
         state = self._state if state is None else state
         version = self._version if version is None else version
         measured = measure(self._bundle, state)
+        game = evaluate(self._bundle, state, measured)
         snapshot = {'schema_version': 2, 'world_version': version,
                 'snapshot_id': 'snap-' + str(version),
                 'scenario_id': self._bundle['scenario_id'],
@@ -86,7 +88,9 @@ class WorldService:
                 'tokens': deepcopy(sorted(state['tokens'].values(), key=lambda t: t['id'])),
                 **measured,
                 # Game score/objectives are a pure function of this state (no event accumulation).
-                'game': evaluate(self._bundle, state, measured),
+                'game': game,
+                # Which placements the same rules say would help now (projector guidance).
+                'mission': mission_guide(self._bundle, state, measured, game),
                 # Shown only after someone asks (suggest action); cleared by a bridge or reset.
                 'ghost_suggestion': (best_suggestion(self._bundle, state, state['ghost_goal'])
                                      if state.get('ghost_goal') else None),

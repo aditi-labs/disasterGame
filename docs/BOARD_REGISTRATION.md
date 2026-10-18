@@ -5,7 +5,26 @@ Owner: Detection Dev 1 (Lane B). Source of truth for values: the **physical boar
 FLOODSHIFT_MASTER_BUILD_SPEC section 2 (retain existing markers), 6.2–6.4, 8 (asset inventory),
 10 (no fake data).
 
-## Current status: IDs and layout verified from a photo; positions still unmeasured
+## Current status (2026-10-18): registered from the printed artwork
+
+The board is `nepalmap.png` printed full-bleed at 24 × 18 in (609.6 × 457.2 mm), with the four
+markers pasted over its corners. `scripts/register_print_artwork.py` now provides both measurements:
+
+- **print → world** (`perception/board_mapping.json`, `MEASURED`): an affine chamfer fit of the
+  scenario's mapped OSM rivers and major roads onto the river/road pixels of the artwork. River
+  residual median 0 px, road median 2.2 px (artwork px); refitting with half of the features
+  withheld moves every scenario site by at most 0.0008 print UV.
+- **marker centres** (`perception/board_registration.json`, `MEASURED`): the board photo is
+  registered to the artwork (SIFT + RANSAC, 60 inliers, median 0.85 px) and the detected markers
+  are mapped into print UV. The pasted markers differ in size (60–66 mm), so `marker_size_mm`
+  is `null`: the camera registers from the four centres (all four must be visible) and the
+  projector masks each marker by the largest measured size.
+
+If markers are re-pasted, re-run the script with a new photo or use `--calibrate` below. The
+projector itself is aligned by pressing `C` on `/projector`: it projects the artwork so the four
+keystone corners can be matched to the paper, instead of guessing.
+
+## Earlier status: IDs and layout verified from a photo
 
 On 2026-10-18 the team supplied a phone photo of the real printed map with its markers
 (`perception/tests/fixtures/real_board_photo_2026-10-18_upright_1400.jpg`, final landscape orientation). Running the
@@ -110,11 +129,13 @@ it cannot invent the missing geospatial mapping. Press `M` or open
 physical alignment evidence. Calibration/test reticles stay off the physical overlay while
 this mismatch is unresolved, and Enter cannot cause projector health to claim CALIBRATED.
 
-After shared integration supplies a measured print-UV/world-UV transform and matching
-print bounds, apply it to geometry, routes, physical observations and marker masks in the
-correct frames before enabling physical projection. Preserve the source square scenario;
-do not stretch it to the photographed paper aspect. Then run projector alignment and
-projector-on camera checks against the actual print.
+Use `scripts/register_print_world.py` with measured landmark pairs to write
+`perception/board_mapping.json`; see [PHYSICAL_INTEGRATION](PHYSICAL_INTEGRATION.md).
+The backend validates both measurement files at startup and serves their mapping at
+`/projection/registration`. The physical adapter uses print-to-world; the projector uses
+its inverse for geography and keeps marker masks in print space. Measured camera bounding
+boxes provide separate black piece-surface keep-outs. Preserve the source square scenario;
+then verify the output and classifier with the actual projector on the actual print.
 
 The existing projector pixel controls remain: `F` fullscreen; `M` screen/overlay;
 `C` calibration; `T` test reticles; arrows translate; `[`/`]` rotate;

@@ -148,6 +148,7 @@ class PhysicalObservation:
     appearance: Appearance | None = None
     frame_provenance: str | None = None         # "live:<device>" or "recording:<path>#<frame>"
     reason: str | None = None                   # why the band is review/reject, human readable
+    world_epoch: str | None = None              # backend reset generation, echoed by the camera service
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -172,6 +173,7 @@ class PhysicalObservation:
             "appearance": self.appearance.as_dict() if self.appearance else None,
             "frame_provenance": self.frame_provenance,
             "reason": self.reason,
+            "world_epoch": self.world_epoch,
         }
 
     def to_json(self) -> str:
@@ -207,6 +209,7 @@ class PhysicalObservation:
                                   bright_low_sat_fraction=app["bright_low_sat_fraction"]) if app else None,
             frame_provenance=data.get("frame_provenance"),
             reason=data.get("reason"),
+            world_epoch=data.get("world_epoch"),
         )
 
 
@@ -226,6 +229,7 @@ class ClassificationResult:
     latency_ms: int | None = None
     evidence: str | None = None
     request_id: str | None = None
+    agreement_frames: int = 0  # distinct camera frames agreeing; not a model probability
 
 
 @dataclass

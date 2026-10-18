@@ -51,6 +51,7 @@ if os.environ.get("FLOODSHIFT_USE_MOCK", "").lower() in {"1", "true", "yes"}:
     raise RuntimeError("FLOODSHIFT_USE_MOCK was removed: the API only serves the real WorldService. "
                        "Unset it and choose a bundle with FLOODSHIFT_SCENARIO.")
 from backend.world.service import WorldService
+from backend.physical import PhysicalAdapter, PhysicalEvent, RunCommand, load_registration
 
 
 # =============================================================================
@@ -67,6 +68,7 @@ world_service: WorldService | None = None
 
 # Lock for world mutations
 world_lock = asyncio.Lock()
+physical_adapter: PhysicalAdapter | None = None
 
 # Perception pipeline status (updated by run_live_demo.py)
 perception_status = {
@@ -150,7 +152,7 @@ def _action_result_from_dict(data: dict, action_id: str) -> ActionResult:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize services on startup."""
-    global world_service
+    global world_service, physical_adapter
     bundle_path = REPO_ROOT / "scenarios" / SCENARIO_ID
     try:
         if SESSION_PATH:
@@ -165,6 +167,9 @@ async def lifespan(app: FastAPI):
         raise RuntimeError(f"FLOODSHIFT cannot start: WorldService failed to initialise "
                            f"scenario {SCENARIO_ID!r} at {bundle_path}: {error}") from error
     service_type = f"WorldService({SCENARIO_ID}{', session ' + SESSION_PATH if SESSION_PATH else ''})"
+    physical_adapter = PhysicalAdapter(load_registration(
+        Path(os.environ.get("FLOODSHIFT_BOARD_MAPPING", REPO_ROOT / "perception/board_mapping.json")),
+        Path(os.environ.get("FLOODSHIFT_BOARD_REGISTRATION", REPO_ROOT / "perception/board_registration.json")), SCENARIO_ID))
     print(f"FLOODSHIFT API started with {service_type}; world version {snapshot.world_version}")
     yield
     print("FLOODSHIFT API shutting down")
@@ -309,7 +314,11 @@ async def post_action(action: WorldAction):
 
     async with world_lock:
         # P4's apply accepts Pydantic models or dicts
+        if action.source.startswith("physical_") and physical_adapter.run_id and not physical_adapter.is_open():
+            return ActionResult(accepted=False, action_id=action.action_id, world_version=_world_version(), rejection_reason="mission_input_closed")
         raw_result = world_service.apply(action)
+        if action.type == ActionType.RESET and raw_result.get("accepted"):
+            physical_adapter.reset()
 
     # Convert to ActionResult if P4 returned a dict
     if isinstance(raw_result, dict):
@@ -343,7 +352,7 @@ async def suggest_action(request: SuggestRequest):
         # The ghost is now part of the authoritative snapshot; every screen shows it.
         await broadcast_snapshot()
     elif result['reason'] == 'unsupported_goal':
-        raise HTTPException(status_code=400, detail="goal_id must be needs_served, food, medical or refuge")
+        raise HTTPException(status_code=400, detail="goal_id must be needs_served, food, medical, refuge or access")
     return {"has_suggestion": result['accepted'], "suggestion": result.get('suggestion'),
             "world_version": result['world_version'], "rejection_reason": result['reason']}
 
@@ -365,6 +374,8 @@ async def reset_world():
             expected_world_version=current_version
         )
         result = world_service.apply(action)
+        if result.get("accepted"):
+            physical_adapter.reset()
     accepted = result['accepted'] if isinstance(result, dict) else result.accepted
 
     if accepted:
@@ -390,6 +401,8 @@ async def branch_load(request: BranchLoadRequest):
     _require_real_world("load_branch")
     async with world_lock:
         result = world_service.load_branch(request.branch_id)
+        if result.get("accepted"):
+            physical_adapter.reset()
     if not result['accepted']:
         raise HTTPException(status_code=404 if result['reason'] == 'unknown_branch' else 400,
                             detail=result['reason'])
@@ -513,6 +526,8 @@ async def observe(observation: ObjectObservation):
         return ObservationResult(accepted=False, world_version=_world_version(),
                                  rejection_reason=f"vision_{observation.vision_status.value}")
     async with world_lock:
+        if physical_adapter.run_id and not physical_adapter.is_open():
+            return ObservationResult(accepted=False, world_version=_world_version(), rejection_reason="mission_input_closed")
         action = WorldAction(
             action_id=f"obs-{observation.event_id}",
             type=ActionType.PLACE_TOKEN,
@@ -553,7 +568,7 @@ async def trigger_scan():
 @app.get("/perception/status")
 async def get_perception_status():
     """Get current perception system status."""
-    return perception_status
+    return {**perception_status, "integration": physical_adapter.status() if physical_adapter else None}
 
 
 @app.post("/perception/status")
@@ -561,7 +576,37 @@ async def update_perception_status(status: dict):
     """Update perception status (called by run_live_demo.py)."""
     global perception_status
     perception_status.update(status)
-    return {"updated": True, "status": perception_status}
+    import time
+    perception_status["received_at"] = time.time()
+    return {"updated": True, "status": await get_perception_status()}
+
+
+@app.get("/projection/registration")
+async def projection_registration():
+    return {**physical_adapter.registration, "occlusions": physical_adapter.occlusions}
+
+
+@app.post("/perception/run")
+async def control_physical_run(command: RunCommand):
+    async with world_lock:
+        try:
+            result = physical_adapter.control(command)
+            if command.state == "close":
+                result["snapshot"] = _snapshot_model().model_dump(mode="json")
+            return result
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error))
+
+
+@app.post("/perception/physical")
+async def observe_physical(event: PhysicalEvent):
+    async with world_lock:
+        result = physical_adapter.observe(event, world_service, perception_status)
+        # Keep feedback and the accepted world snapshot in the same mutation order.
+        await broadcast_event("vision.status", {"observations": [], "physical_feedback": result})
+        if result["applied"]:
+            await broadcast_snapshot()
+    return result
 
 
 # =============================================================================

@@ -1,0 +1,248 @@
+{
+  "generated_at": "2026-10-18T15:05:49.611Z",
+  "scenario_id": "nepal_rasuwa_hot_v1",
+  "source": "Real retained WorldService reducer; backend-generated test snapshots; measured print mapping",
+  "renderer": "React SVG + resvg; not browser screenshots or physical evidence",
+  "outputs": [
+    {
+      "name": "0-idle",
+      "surface": "screen",
+      "world_version": 0,
+      "phase": "IDLE",
+      "elapsed_ms": 0,
+      "stage": 0,
+      "metrics": {
+        "blocked_roads": 0,
+        "resource_spent": 0,
+        "unmet_medical_model": 0,
+        "people_reachable_for_medical": 0,
+        "unmet_food_model": 0,
+        "people_reachable_for_food": 0,
+        "unmet_refuge_model": 0,
+        "people_reachable_for_shelter": 0,
+        "reachable_communities": 0,
+        "road_access_fraction": 1
+      }
+    },
+    {
+      "name": "1-warning",
+      "surface": "screen",
+      "world_version": 14,
+      "phase": "WARNING",
+      "elapsed_ms": 4000,
+      "stage": 1,
+      "metrics": {
+        "blocked_roads": 3,
+        "resource_spent": 0,
+        "unmet_medical_model": 4,
+        "people_reachable_for_medical": 0,
+        "unmet_food_model": 16,
+        "people_reachable_for_food": 0,
+        "unmet_refuge_model": 16,
+        "people_reachable_for_shelter": 0,
+        "reachable_communities": 1,
+        "road_access_fraction": 0.8333333333333334
+      }
+    },
+    {
+      "name": "1b-mission1-reveal",
+      "surface": "screen",
+      "world_version": 14,
+      "phase": "WARNING",
+      "elapsed_ms": 8500,
+      "stage": 1,
+      "metrics": {
+        "blocked_roads": 3,
+        "resource_spent": 0,
+        "unmet_medical_model": 4,
+        "people_reachable_for_medical": 0,
+        "unmet_food_model": 16,
+        "people_reachable_for_food": 0,
+        "unmet_refuge_model": 16,
+        "people_reachable_for_shelter": 0,
+        "reachable_communities": 1,
+        "road_access_fraction": 0.8333333333333334
+      }
+    },
+    {
+      "name": "2-crossing-before",
+      "surface": "screen",
+      "world_version": 14,
+      "phase": "CROSSING",
+      "elapsed_ms": 15000,
+      "stage": 1,
+      "metrics": {
+        "blocked_roads": 3,
+        "resource_spent": 0,
+        "unmet_medical_model": 4,
+        "people_reachable_for_medical": 0,
+        "unmet_food_model": 16,
+        "people_reachable_for_food": 0,
+        "unmet_refuge_model": 16,
+        "people_reachable_for_shelter": 0,
+        "reachable_communities": 1,
+        "road_access_fraction": 0.8333333333333334
+      }
+    },
+    {
+      "name": "2a-matsyas-guidance",
+      "surface": "screen",
+      "world_version": 15,
+      "phase": "CROSSING",
+      "elapsed_ms": 19000,
+      "stage": 1,
+      "metrics": {
+        "blocked_roads": 3,
+        "resource_spent": 0,
+        "unmet_medical_model": 4,
+        "people_reachable_for_medical": 0,
+        "unmet_food_model": 16,
+        "people_reachable_for_food": 0,
+        "unmet_refuge_model": 16,
+        "people_reachable_for_shelter": 0,
+        "reachable_communities": 1,
+        "road_access_fraction": 0.8333333333333334
+      }
+    },
+    {
+      "name": "2b-crossing-restored",
+      "surface": "screen",
+      "world_version": 16,
+      "phase": "CROSSING",
+      "elapsed_ms": 18000,
+      "stage": 1,
+      "metrics": {
+        "blocked_roads": 2,
+        "resource_spent": 2,
+        "unmet_medical_model": 4,
+        "people_reachable_for_medical": 0,
+        "unmet_food_model": 16,
+        "people_reachable_for_food": 0,
+        "unmet_refuge_model": 16,
+        "people_reachable_for_shelter": 0,
+        "reachable_communities": 2,
+        "road_access_fraction": 0.8888888888888888
+      }
+    },
+    {
+      "name": "3-refuge-choice",
+      "surface": "screen",
+      "world_version": 16,
+      "phase": "RELIEF",
+      "elapsed_ms": 32000,
+      "stage": 1,
+      "metrics": {
+        "blocked_roads": 2,
+        "resource_spent": 2,
+        "unmet_medical_model": 4,
+        "people_reachable_for_medical": 0,
+        "unmet_food_model": 16,
+        "people_reachable_for_food": 0,
+        "unmet_refuge_model": 16,
+        "people_reachable_for_shelter": 0,
+        "reachable_communities": 2,
+        "road_access_fraction": 0.8888888888888888
+      }
+    },
+    {
+      "name": "3b-hospital-deployed",
+      "surface": "screen",
+      "world_version": 17,
+      "phase": "RELIEF",
+      "elapsed_ms": 40000,
+      "stage": 1,
+      "metrics": {
+        "blocked_roads": 2,
+        "resource_spent": 3,
+        "unmet_medical_model": 1,
+        "people_reachable_for_medical": 16,
+        "unmet_food_model": 16,
+        "people_reachable_for_food": 0,
+        "unmet_refuge_model": 16,
+        "people_reachable_for_shelter": 0,
+        "reachable_communities": 2,
+        "road_access_fraction": 0.8888888888888888
+      }
+    },
+    {
+      "name": "4-surge",
+      "surface": "screen",
+      "world_version": 18,
+      "phase": "SURGE",
+      "elapsed_ms": 55000,
+      "stage": 2,
+      "metrics": {
+        "blocked_roads": 3,
+        "resource_spent": 3,
+        "unmet_medical_model": 4,
+        "people_reachable_for_medical": 0,
+        "unmet_food_model": 16,
+        "people_reachable_for_food": 0,
+        "unmet_refuge_model": 16,
+        "people_reachable_for_shelter": 0,
+        "reachable_communities": 2,
+        "road_access_fraction": 0.8333333333333334
+      }
+    },
+    {
+      "name": "5-impact",
+      "surface": "screen",
+      "world_version": 19,
+      "phase": "RESULTS",
+      "elapsed_ms": 75000,
+      "stage": 2,
+      "metrics": {
+        "blocked_roads": 3,
+        "resource_spent": 4,
+        "unmet_medical_model": 4,
+        "people_reachable_for_medical": 0,
+        "unmet_food_model": 6,
+        "people_reachable_for_food": 16,
+        "unmet_refuge_model": 16,
+        "people_reachable_for_shelter": 0,
+        "reachable_communities": 2,
+        "road_access_fraction": 0.8333333333333334
+      }
+    },
+    {
+      "name": "overlay-2-crossing-before",
+      "surface": "overlay",
+      "world_version": 14,
+      "phase": "CROSSING",
+      "elapsed_ms": 15000,
+      "stage": 1,
+      "metrics": {
+        "blocked_roads": 3,
+        "resource_spent": 0,
+        "unmet_medical_model": 4,
+        "people_reachable_for_medical": 0,
+        "unmet_food_model": 16,
+        "people_reachable_for_food": 0,
+        "unmet_refuge_model": 16,
+        "people_reachable_for_shelter": 0,
+        "reachable_communities": 1,
+        "road_access_fraction": 0.8333333333333334
+      }
+    },
+    {
+      "name": "overlay-4-surge",
+      "surface": "overlay",
+      "world_version": 18,
+      "phase": "SURGE",
+      "elapsed_ms": 55000,
+      "stage": 2,
+      "metrics": {
+        "blocked_roads": 3,
+        "resource_spent": 3,
+        "unmet_medical_model": 4,
+        "people_reachable_for_medical": 0,
+        "unmet_food_model": 16,
+        "people_reachable_for_food": 0,
+        "unmet_refuge_model": 16,
+        "people_reachable_for_shelter": 0,
+        "reachable_communities": 2,
+        "road_access_fraction": 0.8333333333333334
+      }
+    }
+  ]
+}

@@ -196,6 +196,14 @@ def build(context=CONTEXT, output=OUTPUT):
                   'control_inset_uv': [.84, .84, 1.0, 1.0]},
         'cost_policy': 'Removing or moving a token refunds its model deployment cost; START is latched until reset.'}
     blocked = sorted(name + '_road' for name in bridges)
+    # Surge stage: the hillside road between the refuge and field-care pads floods as well.
+    surge = [e['id'] for e in compact['edges']
+             if {e['from'], e['to']} == {pad_nodes['shelter_site_west'], pad_nodes['medical_site_west']}]
+    if len(surge) != 1:
+        raise ValueError('Surge closure must match exactly one compact road')
+    hazard = {'method': 'illustrative_disruption_mask', 'stages': [[], blocked, sorted(blocked + surge)],
+              'stage_notes': ['dry', 'flash flood closes the three mapped crossings (illustrative)',
+                              'surge: the hillside road between the refuge and field-care pads floods (illustrative)']}
     manifest = deepcopy(audit)
     manifest.update(data_mode='HOT_DERIVED', historical_geometry_used=True,
         runtime_promoted=True, scenario_id=scenario['scenario_id'],
@@ -218,7 +226,7 @@ def build(context=CONTEXT, output=OUTPUT):
                  'No source-confirmed safe facility, damage prediction or travel time is implied.'])
     output.mkdir(parents=True, exist_ok=True)
     for name, value in {'scenario': scenario, 'roads': compact, 'points': compact['nodes'],
-                        'sites': sites, 'hazard': {'method': 'illustrative_disruption_mask', 'stages': [[], blocked]},
+                        'sites': sites, 'hazard': hazard,
                         'source_manifest': manifest}.items():
         write(output / (name + '.json'), value)
     # Keep all map layers in the exact same UV frame as the runtime road geometry.

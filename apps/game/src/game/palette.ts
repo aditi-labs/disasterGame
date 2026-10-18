@@ -1,40 +1,46 @@
-// Projection palette (spec §9 "Visual language"): dark, woodblock, minimal glow.
+// Projection palette: a WHITE projection over the printed map. White light lets the
+// print read through; game state is drawn in saturated ink colours on top of it.
+//
+//   blue  = floodwater         red   = cut off / blocked / affected
+//   green = open route / access violet = camera checking a piece
 //
 // Camera safety: the legacy OpenCV bridge filter (floodshift- backend/perception/
 // bridge_profile.json, inherited from sky e662b58) treats OpenCV hue 17–36 (34°–72°)
 // at saturation ≥ 58/255 as a bridge candidate. No projected colour may fall in that
-// window; palette.test.ts enforces it. Re-test against the new lane C classifier.
+// window; palette tests enforce it. Re-test against the Perceptron classifier.
 
 export const PALETTE = {
-  ink: "#05080c",
-  vignette: "#000000",
-  // Water: deep desaturated teal with engraved hatching; cyan lip only while advancing.
-  waterDeep: "#0b2f36",
-  water: "#17575f",
-  waterMid: "#2b7d84",
-  waterHatch: "#6fb7b8",
-  waterLip: "#8ff4ff",
-  foam: "#dff6f4",
-  // Danger / flooded population: muted rose, never bright red.
-  danger: "#c4485a",
-  dangerHatch: "#e07a8a",
-  // Blocked route: rust red dashed.
-  blocked: "#b8492f",
-  // Safe accessible route: seafoam mint.
-  route: "#62d9ad",
-  routeBright: "#d8fff0",
-  // Pending camera candidate: dark blue / white pulse.
-  pending: "#9db4ff",
-  // Services.
-  hospital: "#e9eef6", // pearl
-  shelter: "#3fbf9b", // sea green
-  food: "#ff7d6e", // coral relief crate (warm but below the camera's hue window)
-  bridge: "#cfd9e4",
-  ghost: "#a98bff", // violet
-  cream: "#efe6d6", // population pinpoints (low saturation)
-  text: "#e8edf2",
-  textDim: "#93a1ae",
-  pad: "#b9d7ff",
+  paper: "#ffffff",
+  ink: "#0f1b2d",
+  inkSoft: "#46566b",
+  inkFaint: "#8a96a6",
+  rule: "#d5dbe3",
+  // Water.
+  water: "#2f7fe0",
+  waterDeep: "#1a56a8",
+  waterLip: "#0b3d91",
+  foam: "#e6f1ff",
+  // Danger / cut off / blocked.
+  danger: "#d62839",
+  dangerSoft: "#f6c9cf",
+  // Open route / access restored.
+  route: "#119a4b",
+  routeSoft: "#c9f0d8",
+  // Camera candidate.
+  pending: "#6a4fd8",
+  // Services (shape + colour, never colour alone).
+  hospital: "#c2187a",
+  shelter: "#0b8f86",
+  food: "#e8590c",
+  bridge: "#119a4b",
+  highlight: "#1554c9",
+  // Matsya / Boat of Hope "gold": amber at hue ~31° (below the 34° camera window) and a
+  // pale gold whose saturation stays under the filter's 58/255 threshold.
+  gold: "#cf7f2a",
+  goldPale: "#efe3c4",
+  cream: "#0f1b2d",
+  text: "#0f1b2d",
+  textDim: "#46566b",
 } as const;
 
 export type PaletteKey = keyof typeof PALETTE;

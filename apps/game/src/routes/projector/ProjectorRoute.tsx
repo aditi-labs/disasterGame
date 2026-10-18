@@ -3,18 +3,25 @@ import { useLiveWorld } from "../../live/useLiveWorld";
 import { openChannel, type ChannelMessage, type RejectionCue } from "../../game/channel";
 import { CLOCK_STALE_MS, extrapolateClock, FREEZE_AT_MS, IDLE_VIEW, type ClockView } from "../../game/clock";
 import { calibrationMatrix3d, DEFAULT_CALIBRATION, type Calibration } from "../../game/homography";
-import { BoardSvg } from "../../game/overlays/BoardSvg";
+import { ProjectionScene } from "../../game/overlays/ProjectionScene";
+import { buildGuide } from "../../game/guide";
+import { PRINT_H, PRINT_W } from "../../game/printFrame";
 import { buildResults } from "../../game/results";
-import { BEATS, LIVE_DATA_UNAVAILABLE } from "../../game/story";
+import { BEATS, LIVE_DATA_UNAVAILABLE, MISSION1_REVEAL_MS, placementHint } from "../../game/story";
 import { buildBoardModel } from "../../game/worldAdapter";
-import { BOARD_REGISTRATION_REQUIRED, PRINT_WORLD_ALIGNMENT_VERIFIED } from "../../game/board";
+import { BOARD_REGISTRATION_REQUIRED } from "../../game/board";
+import type { TokenType, WorldSnapshot } from "../../types/contracts";
 
 // /projector — fullscreen projection over the printed board. No diagnostics, no code
-// labels, no sound. Retained keys (floodshift- ProjectionView):
-//   F fullscreen · M overlay-only <-> screen basemap · C projector calibration
-// plus T registration test pattern. In calibration: arrows move, [ ] rotate, - = scale,
-// , . x-scale, ; ' y-scale, 1–4 pick a keystone corner (arrows then move that corner,
-// 5 back to whole-image), shift ×10, 0 reset, Enter save.
+// labels, no sound. Keys:
+//   F fullscreen · M overlay <-> screen (artwork basemap) · A align mode (projects the
+//   printed artwork itself so keystone can be matched to the paper) · C projector
+//   calibration · T registration test pattern. In calibration: arrows move, [ ] rotate,
+//   - = scale, , . x-scale, ; ' y-scale, 1–4 pick a keystone corner (arrows then move
+//   that corner, 5 back to whole-image), shift ×10, 0 reset, Enter save.
+
+type Surface = "overlay" | "screen" | "align";
+const PIECE_OF_CLASS: Record<string, TokenType> = { bridge: "bridge", hospital: "hospital", shelter: "shelter", food_station: "food_shelter" };
 
 const CAL_KEY = "floodshift.game.projector.calibration.v2";
 
@@ -38,19 +45,26 @@ function saveCal(c: Calibration) {
 export function ProjectorRoute() {
   const world = useLiveWorld();
   const params = new URLSearchParams(window.location.search);
-  const [overlay, setOverlay] = useState(params.get("mode") !== "screen");
+  const [surface, setSurface] = useState<Surface>(params.get("mode") === "screen" ? "screen" : params.get("mode") === "align" ? "align" : "overlay");
+  const overlay = surface === "overlay";
   const [calibrating, setCalibrating] = useState(false);
   const [testing, setTesting] = useState(false);
+  // Mythic narrative layer (Matsya's Guidance, Boat of Hope): N toggles, ?narrative=0 hides.
+  const [narrative, setNarrative] = useState(params.get("narrative") !== "0");
   const [corner, setCorner] = useState<number | null>(null);
   const [cal, setCal] = useState<Calibration>(loadCal);
   const [clock, setClock] = useState<{ view: ClockView; sentAt: number }>({ view: IDLE_VIEW, sentAt: performance.now() });
   const [syncing, setSyncing] = useState(false);
+  const [finalSnapshot, setFinalSnapshot] = useState<WorldSnapshot | null>(null);
   const [rejections, setRejections] = useState<RejectionCue[]>([]);
   const [, setTick] = useState(0);
   const stageRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: window.innerWidth, h: window.innerHeight });
   const channel = useRef<ReturnType<typeof openChannel> | null>(null);
   const clearPending = world.clearPending;
+  const alignmentReady = world.registration?.ready === true;
+  // The projector needs only the measured print<->world mapping; camera actions need markers too.
+  const mappingReady = !!world.registration?.world_to_print && (world.registration.mapping_ready === true || alignmentReady);
 
   useEffect(() => saveCal(cal), [cal]);
 
@@ -60,6 +74,7 @@ export function ProjectorRoute() {
         case "clock":
           setClock({ view: m.view, sentAt: performance.now() });
           setSyncing(m.syncing);
+          setFinalSnapshot(m.finalSnapshot ?? null);
           break;
         case "reject":
           setRejections((list) => [...list.filter((r) => r.until > Date.now()), m.cue]);
@@ -68,8 +83,10 @@ export function ProjectorRoute() {
         case "command":
           if (m.cmd === "calibrate") setCalibrating(true);
           else if (m.cmd === "test") setTesting((v) => !v);
-          else if (m.cmd === "overlay") setOverlay(true);
-          else if (m.cmd === "screen") setOverlay(false);
+          else if (m.cmd === "overlay") setSurface("overlay");
+          else if (m.cmd === "screen") setSurface("screen");
+          else if (m.cmd === "narrative") setNarrative((v) => !v);
+          else if (m.cmd === "align") setSurface((v) => (v === "align" ? "overlay" : "align"));
           else if (m.cmd === "exit-tools") {
             setCalibrating(false);
             setTesting(false);
@@ -89,11 +106,11 @@ export function ProjectorRoute() {
   // Projector health for the operator status line.
   useEffect(() => {
     const send = () =>
-      channel.current?.post({ t: "projector-health", overlay, calibrating, testing, calibratedAt: PRINT_WORLD_ALIGNMENT_VERIFIED ? cal.savedAt : null, alignmentVerified: PRINT_WORLD_ALIGNMENT_VERIFIED, sentAt: Date.now() });
+      channel.current?.post({ t: "projector-health", overlay, calibrating, testing, calibratedAt: mappingReady ? cal.savedAt : null, alignmentVerified: mappingReady, sentAt: Date.now() });
     send();
     const id = window.setInterval(send, 1000);
     return () => window.clearInterval(id);
-  }, [overlay, calibrating, testing, cal.savedAt]);
+  }, [overlay, calibrating, testing, cal.savedAt, mappingReady]);
 
   useEffect(() => {
     const id = window.setInterval(() => setTick((n) => n + 1), 250);
@@ -114,12 +131,14 @@ export function ProjectorRoute() {
         else document.documentElement.requestFullscreen().catch(() => {});
         return;
       }
-      if (k === "m") return setOverlay((v) => !v);
+      if (k === "m") return setSurface((v) => (v === "overlay" ? "screen" : "overlay"));
+      if (k === "a") return setSurface((v) => (v === "align" ? "overlay" : "align"));
       if (k === "c") {
         setCorner(null);
         return setCalibrating((v) => !v);
       }
       if (k === "t") return setTesting((v) => !v);
+      if (k === "n") return setNarrative((v) => !v);
       if (!calibrating) return;
       const step = e.shiftKey ? 10 : 1;
       if (["1", "2", "3", "4"].includes(e.key)) return setCorner(Number(e.key) - 1);
@@ -157,8 +176,9 @@ export function ProjectorRoute() {
     return () => window.removeEventListener("keydown", onKey);
   }, [calibrating, corner]);
 
-  const { snapshot, scenario, scenarioError, scenarioMismatch, reactions, observations } = world;
+  const { scenario, scenarioError, scenarioMismatch, reactions, observations } = world;
   const view = extrapolateClock(clock.view, clock.sentAt, performance.now());
+  const snapshot = view.phase === "RESULTS" && finalSnapshot ? finalSnapshot : world.snapshot;
   const clockStale = view.sessionId != null && performance.now() - clock.sentAt > CLOCK_STALE_MS;
   const open = !clockStale && world.status === "live" && (view.mode === "running" || view.mode === "paused") && view.elapsedMs < FREEZE_AT_MS;
   const model = useMemo(
@@ -166,30 +186,50 @@ export function ProjectorRoute() {
     [scenario, snapshot, view.phase, open],
   );
   const results = useMemo(() => (scenario && snapshot && view.phase === "RESULTS" ? buildResults(scenario, snapshot) : null), [scenario, snapshot, view.phase]);
-  const pending = [...observations.values()].filter((o) => o.vision_status === "pending" && !snapshot?.tokens.some((t) => t.id === o.token_id));
-  const registrationBlocked = overlay && !PRINT_WORLD_ALIGNMENT_VERIFIED;
+  const revealed = view.elapsedMs >= MISSION1_REVEAL_MS;
+  const guide = useMemo(() => buildGuide(view, snapshot), [view.phase, view.surge, revealed, snapshot]);
+  const recent = (world.physicalFeedback ?? []).filter(f => f.until > Date.now());
+  const feedback = recent.filter(f => f.board_uv);
+  const physicalPending = feedback.filter(f => f.status === "pending").map(f => ({ token_id: f.track_id, board_uv: f.board_uv!, label: f.rejection_reason === "detection_pending" ? "PIECE DETECTED" : "CHECKING PLACEMENT" }));
+  const pending = [...[...observations.values()].filter((o) => o.vision_status === "pending" && !snapshot?.tokens.some((t) => t.id === o.token_id)), ...physicalPending];
+  const hint = (f: (typeof recent)[number]) => placementHint(f.piece_class ? PIECE_OF_CLASS[f.piece_class] : null, f.rejection_reason);
+  const physicalRejections = feedback.filter(f => f.status === "rejected").map(f => ({ id: f.event_id, uv: f.board_uv!, text: hint(f), until: f.until }));
+  // A rejected placement without a usable position is still never silent.
+  const notices = recent.filter(f => f.status === "rejected" && !f.board_uv).map(hint);
+  const registrationBlocked = surface !== "screen" && !mappingReady;
   const hold = !scenario || !snapshot ? LIVE_DATA_UNAVAILABLE : registrationBlocked ? BOARD_REGISTRATION_REQUIRED : null;
   const transform = calibrationMatrix3d(cal, size.w, size.h);
+  const print = world.registration?.board;
+  const aspect = print ? print.width_mm / print.height_mm : PRINT_W / PRINT_H;
+  const printWidth = Math.min(size.w, size.h * aspect);
+  const printHeight = printWidth / aspect;
+  const frame = surface !== "screen" && mappingReady ? { position: "absolute" as const, left: (size.w-printWidth)/2, top: (size.h-printHeight)/2, width: printWidth, height: printHeight } : { width: "100%", height: "100%" };
 
   return (
-    <div className={`projector ${overlay ? "projector-overlay" : "projector-screen"}`}>
+    <div className={`projector projector-${surface}`}>
       <div ref={stageRef} className="projector-stage" style={{ transform, transformOrigin: "0 0" }}>
+        <div className="projection-frame" style={frame}>
         {scenario ? (
-          <BoardSvg
+          <ProjectionScene
             scenario={scenario}
             snapshot={snapshot}
             model={model}
+            guide={guide}
             clock={view}
-            reactions={reactions}
-            rejections={rejections}
-            pending={pending}
-            surface={overlay ? "overlay" : "screen"}
+            reactions={view.phase === "RESULTS" ? [] : reactions}
+            rejections={view.phase === "RESULTS" ? [] : [...rejections, ...physicalRejections]}
+            pending={view.phase === "RESULTS" ? [] : pending}
+            surface={calibrating && surface === "overlay" ? "align" : surface}
             variant="projector"
             results={results}
-            resultsSyncing={syncing || world.status !== "live" || clockStale}
+            resultsSyncing={syncing || (view.phase === "RESULTS" && !finalSnapshot) || world.status !== "live" || clockStale}
             connectionLost={world.status !== "live" || clockStale}
             hold={hold}
             testPattern={!registrationBlocked && (testing || calibrating)}
+            registration={world.registration}
+            occlusions={Object.values(world.footprints ?? {})}
+            notices={view.phase === "RESULTS" ? [] : notices}
+            narrative={narrative}
           />
         ) : (
           <div className="projector-hold">
@@ -200,10 +240,11 @@ export function ProjectorRoute() {
             </div>
           </div>
         )}
+        </div>
       </div>
       {calibrating && (
         <div className="cal-panel">
-          <b>PROJECTOR CALIBRATION</b> {corner == null ? "whole image" : `corner ${["TL", "TR", "BR", "BL"][corner]}`} · arrows move · [ ] rotate · - = scale · , . x · ; ' y · 1–4 corner · 5 whole · shift ×10 · 0 reset · Enter save · C close
+          <b>PROJECTOR CALIBRATION</b> the printed map is projected: line its rivers and roads up with the paper · {corner == null ? "whole image" : `corner ${["TL", "TR", "BR", "BL"][corner]}`} · arrows move · [ ] rotate · - = scale · , . x · ; ' y · 1–4 corner · 5 whole · shift ×10 · 0 reset · Enter save · C close
           <br />
           dx {cal.dx} dy {cal.dy} rot {cal.rot}° sx {cal.sx} sy {cal.sy} · corners {cal.corners.map((p) => p.join(",")).join(" | ")} · {cal.savedAt ? `saved ${new Date(cal.savedAt).toLocaleTimeString()}` : "UNSAVED"}
         </div>

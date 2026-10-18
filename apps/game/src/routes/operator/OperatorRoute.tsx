@@ -4,15 +4,17 @@ import { perceptionView } from "../../live/perceptionStatus";
 import type { TokenType, WorldSnapshot } from "../../types/contracts";
 import { TOKEN_SITE_KIND } from "../../types/contracts";
 import type { ScenarioGeometry } from "../../types/scenario";
-import { MARKER_LAYOUT_VERIFIED, MARKER_PROVENANCE, MARKERS_VERIFIED, PRINT_WORLD_ALIGNMENT_NOTE, PRINT_WORLD_ALIGNMENT_VERIFIED } from "../../game/board";
+import { MARKER_LAYOUT_VERIFIED, MARKER_PROVENANCE, PRINT_WORLD_ALIGNMENT_NOTE } from "../../game/board";
 import { BOUNDARIES_S, MISSION_MS } from "../../game/clock";
-import { BoardSvg } from "../../game/overlays/BoardSvg";
+import { ProjectionScene } from "../../game/overlays/ProjectionScene";
+import { buildGuide } from "../../game/guide";
 import { PieceIcon } from "../../game/overlays/glyphs";
 import { buildResults } from "../../game/results";
 import { isMuted, setMuted } from "../../game/sound";
 import { BEATS, CONNECTION_LOST, FLOOD_UPDATE_UNAVAILABLE, GAME_PIECES, LIVE_DATA_UNAVAILABLE, PIECE_NAME } from "../../game/story";
 import { buildBoardModel, peopleReachable, SERVICES, totalNeed, totalPeople, unmetNeed } from "../../game/worldAdapter";
 import { useMission, type Mission } from "./useMission";
+import { StartScreen } from "./StartScreen";
 
 // /operator — the laptop view (spec §9 "Operator UI"). Every control maps to one
 // authoritative backend action; numbers are read from the latest snapshot only.
@@ -54,17 +56,23 @@ export function OperatorRoute() {
   const liveData = !!scenario && !!snapshot && !scenarioMismatch && !healthError;
   const connected = status === "live";
   const busy = mission.starting || world.inFlight > 0;
+  const [tools, setTools] = useState(() => new URLSearchParams(window.location.search).get("tools") === "1");
+  const resultSnapshot = mission.finalSnapshot ?? snapshot;
 
   const model = useMemo(
     () => (scenario && snapshot ? buildBoardModel(scenario, snapshot, inMission ? beat.pieces : [], inputOpen) : null),
     [scenario, snapshot, beat.pieces, inputOpen, inMission],
   );
-  const results = useMemo(() => (scenario && snapshot ? buildResults(scenario, snapshot) : null), [scenario, snapshot]);
+  const results = useMemo(() => (scenario && resultSnapshot ? buildResults(scenario, resultSnapshot) : null), [scenario, resultSnapshot]);
+  const guide = useMemo(() => buildGuide(view, snapshot), [view.phase, view.surge, view.elapsedMs >= 8000, snapshot]);
 
   // Keys 3–6 only in diagnostic/manual mode (spec: never active player instructions).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!debug || (e.target as HTMLElement)?.tagName === "INPUT" || (e.target as HTMLElement)?.tagName === "SELECT") return;
+      const target = e.target as HTMLElement;
+      if (["INPUT", "SELECT", "TEXTAREA"].includes(target?.tagName) || target?.isContentEditable || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+      if (e.key.toLowerCase() === "o") return setTools(v => !v);
+      if (!debug) return;
       if (KEY_PIECES[e.key]) setPiece(KEY_PIECES[e.key]);
     };
     window.addEventListener("keydown", onKey);
@@ -91,6 +99,7 @@ export function OperatorRoute() {
   const projectorSeen = mission.projector && Date.now() - mission.projector.seenAt < 3000;
   const projectorValue = !projectorSeen ? "NOT OPEN" : !mission.projector!.overlay ? "SCREEN" : !mission.projector!.alignmentVerified ? "ALIGNMENT REQUIRED" : mission.projector!.calibratedAt ? "CALIBRATED" : "UNCALIBRATED";
   const telemetry = perceptionView(perception, health?.perceptron_status);
+  const alignmentReady = world.registration?.ready === true;
 
   const downloadRun = () => {
     const record = {
@@ -102,13 +111,13 @@ export function OperatorRoute() {
       session_id: clock.sessionId,
       started_at: mission.startedAt,
       exported_at: new Date().toISOString(),
-      final_world_version: snapshot?.world_version ?? null,
+      final_world_version: resultSnapshot?.world_version ?? null,
       final_phase: phase,
       surge: clock.surge,
-      marker_registration: { verified: MARKERS_VERIFIED, layout_verified_from_photo: MARKER_LAYOUT_VERIFIED, print_world_alignment_verified: PRINT_WORLD_ALIGNMENT_VERIFIED, provenance: MARKER_PROVENANCE },
+      marker_registration: { verified: alignmentReady, layout_verified_from_photo: MARKER_LAYOUT_VERIFIED, print_world_alignment_verified: alignmentReady, provenance: MARKER_PROVENANCE },
       events: world.run,
-      final_game: snapshot?.game ?? null,
-      final_metrics: snapshot?.metrics ?? null,
+      final_game: resultSnapshot?.game ?? null,
+      final_metrics: resultSnapshot?.metrics ?? null,
     };
     const blob = new Blob([JSON.stringify(record, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
@@ -118,12 +127,20 @@ export function OperatorRoute() {
     URL.revokeObjectURL(a.href);
   };
 
+  if (!tools) {
+    return <StartScreen mode={clock.mode} phase={phase} remainingMs={view.remainingMs} ready={liveData && connected} starting={busy} physicalInputReady={telemetry.camera.tone === "ok" && telemetry.registrationReady && telemetry.perceptron.tone === "ok" && alignmentReady} error={mission.startError ?? (!liveData ? scenarioError ?? healthError ?? null : null)} onStart={() => void mission.startGame()}
+      guide={liveData ? guide : null} results={finished ? results : null} fallbackBusy={!inputOpen}
+      onFallback={(o) => void (o.move_token_id ? mission.manual.move(o.move_token_id, o.site_id, o.board_uv) : mission.manual.place(o.piece, o.site_id, o.board_uv))}
+      onAskMatsya={() => void mission.askMatsya()} finalSnapshot={finished ? resultSnapshot : null} />;
+  }
+
   return (
     <div className="operator">
       <header className="op-header">
         <div className="op-brand">
           <b>FLOODSHIFT</b> <span>operator</span>
         </div>
+        <button className="btn btn-sm btn-quiet" onClick={() => setTools(false)}>CLOSE TOOLS · O</button>
         <div className="status-line">
           <Status label="DB/SCENARIO" value={scenario ? `${scenario.scenario_id}${fingerprint ? " · " + fingerprint.slice(0, 8) : ""}` : "UNAVAILABLE"} tone={scenario && !scenarioMismatch ? "ok" : "bad"} title={fingerprint ? `sha256 of GET /scenario: ${fingerprint}` : scenarioError ?? undefined} />
           <Status label="WORLD/WS" value={`${status.toUpperCase()}${snapshot ? ` · v${snapshot.world_version}` : ""}`} tone={connected ? "ok" : status === "connecting" ? "warn" : "bad"} />
@@ -148,8 +165,8 @@ export function OperatorRoute() {
       {liveData && (scenario?.stage_count ?? 0) < 3 && (
         <div className="banner banner-warn">This scenario has one flood stage, activated at START. The 50-second surge will report FLOOD UPDATE UNAVAILABLE until the data owner supplies a second stage.</div>
       )}
-      {!MARKERS_VERIFIED && <div className="banner banner-warn">ArUco: {MARKER_PROVENANCE}. Lane B still needs ruler measurements and a live reprojection check (docs/BOARD_REGISTRATION.md).</div>}
-      {!PRINT_WORLD_ALIGNMENT_VERIFIED && <div className="banner banner-warn">{PRINT_WORLD_ALIGNMENT_NOTE}</div>}
+      {!world.registration?.world_to_print && <div className="banner banner-warn">{PRINT_WORLD_ALIGNMENT_NOTE}</div>}
+      {world.registration?.world_to_print && !alignmentReady && <div className="banner banner-warn">Projector mapping is measured from nepalmap.png, but camera markers are not: physical placement stays blocked. ArUco: {MARKER_PROVENANCE}.</div>}
 
       <main className="op-grid">
         <section className="card op-mission">
@@ -181,11 +198,6 @@ export function OperatorRoute() {
                 LOAD LIVE SCENARIO
               </button>
             )}
-            {clock.mode === "idle" && (
-              <button className="btn btn-quiet" onClick={mission.intro} disabled={!liveData} title="Optional transition card, outside the 75-second clock">
-                PLAY INTRO CARD
-              </button>
-            )}
             {preStart && (
               <button className="btn btn-primary" onClick={() => void mission.startGame()} disabled={!liveData || !connected || busy}>
                 {mission.starting ? "STARTING…" : "START GAME"}
@@ -207,8 +219,8 @@ export function OperatorRoute() {
               </button>
             )}
             {running && (
-              <button className="btn btn-ghost" onClick={() => void mission.suggestBridge()} disabled={!inputOpen}>
-                SUGGEST BRIDGE
+              <button className="btn btn-ghost" onClick={() => void mission.askMatsya()} disabled={!inputOpen}>
+                MATSYA&apos;S GUIDANCE
               </button>
             )}
             {inMission && (
@@ -232,10 +244,11 @@ export function OperatorRoute() {
             Board <small>{inputOpen ? (moving ? `click a ${PIECE_NAME[moving.type]} pad to move ${moving.id}` : `click a pad: MANUAL PLACE ${PIECE_NAME[piece]}`) : "mirror of the projector (live snapshot)"}</small>
           </h2>
           {scenario ? (
-            <BoardSvg
+            <ProjectionScene
               scenario={scenario}
               snapshot={snapshot}
               model={model}
+              guide={guide}
               clock={view}
               reactions={world.reactions}
               rejections={mission.rejections}
@@ -243,6 +256,7 @@ export function OperatorRoute() {
               surface="screen"
               variant="operator"
               results={null}
+              registration={world.registration}
               hold={liveData ? null : LIVE_DATA_UNAVAILABLE}
               onSiteClick={inputOpen ? onSiteClick : undefined}
               highlightSite={placeSite || null}
@@ -372,6 +386,14 @@ export function OperatorRoute() {
                     TEST PROJECTOR
                   </button>
                 )}
+                {preStart && (
+                  <button className="btn" onClick={() => mission.command("align")} disabled={!projectorSeen} title="Projects nepalmap.png so keystone can be matched to the printed map">
+                    SHOW MAP TO ALIGN
+                  </button>
+                )}
+                <button className="btn" onClick={() => mission.command("narrative")} disabled={!projectorSeen} title="Show or hide Matsya's Guidance and the Boat of Hope on the projector">
+                  TOGGLE NARRATIVE LAYER
+                </button>
                 {paused && (
                   <button
                     className="btn"
@@ -467,8 +489,7 @@ function Legend() {
       <span className="lg lg-route">reachable route</span>
       <span className="lg lg-blocked">blocked / would-be route</span>
       <span className="lg lg-danger">affected population marker</span>
-      <span className="lg lg-pad">valid pad</span>
-      <span className="lg lg-ghost">suggested bridge</span>
+      <span className="lg lg-pad">glowing mission site</span>
       <span className="lg lg-pending">camera candidate (pending)</span>
     </div>
   );

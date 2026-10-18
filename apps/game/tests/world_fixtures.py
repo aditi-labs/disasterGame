@@ -42,8 +42,31 @@ assert apply('move_token', site_id='crossing_west', token_id='bridge')['accepted
 states['moved'] = world.snapshot()
 assert apply('remove_token', token_id='bridge')['accepted']
 states['removed'] = world.snapshot()
+assert apply('advance_stage')['accepted']  # stage 2: the surge closure
+states['surged'] = world.snapshot()
 assert apply('advance_stage')['reason'] == 'last_stage'
 states['failed_surge'] = world.snapshot()
 assert apply('reset')['accepted']
 states['reset'] = world.snapshot()
+
+# The 75-second game as played: START, bridge, one service, surge, last response.
+assert apply('place_token', 'disaster_start', 'start_pad', 'start')['accepted']
+for site in sites.values():
+    if site['kind'] == 'population_node':
+        assert apply('place_token', 'person', site['id'], site['id'])['accepted']
+states['game_start'] = world.snapshot()
+# Matsya's Guidance: the existing ghost planner, asked to reconnect people.
+assert world.request_suggestion('access')['accepted']
+states['game_guided'] = world.snapshot()
+assert apply('place_token', 'bridge', 'crossing_east', 'bridge')['accepted']
+states['game_bridge'] = world.snapshot()
+assert apply('place_token', 'hospital', 'medical_site_west', 'hospital')['accepted']
+states['game_service'] = world.snapshot()
+assert apply('advance_stage')['accepted']
+states['game_surge'] = world.snapshot()
+# The last response among pieces the camera recognises (no shelter piece by default).
+opportunity = max((o for o in states['game_surge']['mission']['services'] if o['piece'] in ('hospital', 'food_shelter')),
+                  key=lambda o: o['score_gain'])
+assert apply('place_token', opportunity['piece'], opportunity['site_id'], opportunity['piece'])['accepted']
+states['game_final'] = world.snapshot()
 print(json.dumps(dict(scenario=world.scenario_geometry(), states=states, actions=actions)))

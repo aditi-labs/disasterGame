@@ -1,14 +1,14 @@
 {
   "schema": "floodshift.board_registration.v1",
-  "status": "UNVERIFIED_TENTATIVE",
-  "status_note": "IDs, dictionary family, corner layout and printed rotations are VERIFIED from a photo of the physical board (2026-10-18, see docs/BOARD_REGISTRATION.md). Marker centre positions and the board size are PHOTO ESTIMATES (perspective photo, left paper edge cut off) and must be confirmed with a ruler via `python -m perception.service --calibrate`, which rewrites this file with status MEASURED. Until then the service reports registration_verified=false.",
+  "status": "MEASURED",
+  "status_note": "Marker centres measured by registering the board photo to the printed artwork (scripts/register_print_artwork.py). Paper size from the print specification. Re-run perception.service --calibrate if markers were moved after the photo.",
   "frame_note": "UV frame = the UPRIGHT printed map as the team finalised it (landscape, map labels readable, river entering from the top): u to the right, v down, (0,0) at the paper's top-left corner, (1,1) at its bottom-right. NOTE FOR SHARED INTEGRATION: this print is landscape (height ~0.76 x width) while the scenario's board frame is a 420x420 square; the print-UV -> world board_uv/geo transform is owned by the shared lane and is NOT the identity.",
   "board": {
     "scenario_id": "nepal_rasuwa_hot_v1",
-    "width_mm": 594.0,
-    "height_mm": 453.0,
+    "width_mm": 609.6,
+    "height_mm": 457.2,
     "uv_origin": "top_left",
-    "dimensions_source": "PHOTO ESTIMATE: aspect height/width = 0.763 measured from the 2026-10-18 photo after rectification; absolute width ASSUMED 594 mm (A-series) only so that mm-based gates have a scale. Replace both numbers with ruler measurements of the paper."
+    "dimensions_source": "print specification 24 x 18 in; artwork aspect 0.7500"
   },
   "aruco": {
     "dictionary": "DICT_4X4_50",
@@ -22,7 +22,13 @@
       "DICT_ARUCO_ORIGINAL"
     ],
     "marker_size_mm": null,
-    "marker_size_note": "Not measured. Photo estimate: black square edge = 0.132 x paper height (about 60 mm if the paper is 453 mm tall). Measure it with a ruler and set it here to enable corner-based registration (16 points, partial-occlusion tolerant); null = centres only, all four markers required."
+    "marker_size_note": "Per-marker printed edges measured from the registered photo (mm). They differ, so registration uses the four measured centres (all four markers must be visible); the projector masks each marker by its own measured size.",
+    "marker_sizes_mm": {
+      "10": 61.0,
+      "11": 60.4,
+      "12": 66.0,
+      "13": 65.2
+    }
   },
   "markers": [
     {
@@ -30,52 +36,52 @@
       "role": "board_corner",
       "label": "top_left",
       "center_uv": [
-        0.065,
-        0.067
+        0.0624,
+        0.0693
       ],
       "rotation_deg": 0,
-      "verified": false,
+      "verified": true,
       "id_and_layout_verified": true,
-      "position_source": "photo_estimate_2026-10-18"
+      "position_source": "photo real_board_photo_2026-10-18_upright_1400.jpg registered to nepalmap.png"
     },
     {
       "id": 11,
       "role": "board_corner",
       "label": "top_right",
       "center_uv": [
-        0.944,
-        0.067
+        0.952,
+        0.0645
       ],
       "rotation_deg": 0,
-      "verified": false,
+      "verified": true,
       "id_and_layout_verified": true,
-      "position_source": "photo_estimate_2026-10-18"
+      "position_source": "photo real_board_photo_2026-10-18_upright_1400.jpg registered to nepalmap.png"
     },
     {
       "id": 13,
       "role": "board_corner",
       "label": "bottom_right",
       "center_uv": [
-        0.944,
-        0.918
+        0.9393,
+        0.9174
       ],
       "rotation_deg": 0,
-      "verified": false,
+      "verified": true,
       "id_and_layout_verified": true,
-      "position_source": "photo_estimate_2026-10-18 (bottom inset least certain: paper edge cut off at the photo border)"
+      "position_source": "photo real_board_photo_2026-10-18_upright_1400.jpg registered to nepalmap.png"
     },
     {
       "id": 12,
       "role": "board_corner",
       "label": "bottom_left",
       "center_uv": [
-        0.065,
-        0.918
+        0.06,
+        0.9168
       ],
       "rotation_deg": 0,
-      "verified": false,
+      "verified": true,
       "id_and_layout_verified": true,
-      "position_source": "photo_estimate_2026-10-18 (bottom inset least certain: paper edge cut off at the photo border)"
+      "position_source": "photo real_board_photo_2026-10-18_upright_1400.jpg registered to nepalmap.png"
     }
   ],
   "photo_evidence": {
@@ -107,13 +113,13 @@
     "derived": "Layout TL=10, TR=11, BR=13, BL=12 (the legacy audit's assumed 12/13 order is swapped on the real board); all markers printed upright."
   },
   "measured": {
-    "measured_on": null,
-    "measured_by": null,
-    "camera_source": null,
+    "measured_on": "2026-10-18T14:20:41.365989+00:00",
+    "measured_by": "Claude (artwork registration for skylynxf1)",
+    "camera_source": "still photo real_board_photo_2026-10-18_upright_1400.jpg",
     "frame_size": null,
     "reprojection_rms_uv": null,
     "reprojection_rms_px": null,
     "detected_ids_all": null,
-    "notes": null
+    "notes": "photo->artwork homography: 60 SIFT inliers, median 0.85 px"
   }
 }

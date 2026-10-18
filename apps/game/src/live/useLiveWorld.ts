@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { API_URL, SCENARIO_ID } from "../config";
-import type { ActionResult, Envelope, HealthResponse, ObjectObservation, TokenType, UV, WorldAction, WorldSnapshot } from "../types/contracts";
+import type { ActionResult, Envelope, HealthResponse, ObjectObservation, PhysicalFeedback, ProjectionRegistration, TokenType, UV, WorldAction, WorldSnapshot } from "../types/contracts";
 import type { ScenarioGeometry } from "../types/scenario";
 import { setBoardAspect } from "../types/geometry";
 import { diffSnapshots, type ReactionSet } from "../game/reactions";
@@ -70,6 +70,9 @@ export function useLiveWorld({ pollHealth = false }: { pollHealth?: boolean } = 
   const [run, setRun] = useState<RunEvent[]>([]);
   const [inFlight, setInFlight] = useState(0);
   const [loadCount, setLoadCount] = useState(0);
+  const [registration, setRegistration] = useState<ProjectionRegistration | null>(null);
+  const [physicalFeedback, setPhysicalFeedback] = useState<(PhysicalFeedback & { until: number })[]>([]);
+  const [footprints, setFootprints] = useState<Record<string, UV[]>>({});
 
   const lastSeq = useRef(-Infinity);
   const snapRef = useRef<WorldSnapshot | null>(null);
@@ -99,6 +102,17 @@ export function useLiveWorld({ pollHealth = false }: { pollHealth?: boolean } = 
   );
 
   // Geometry is static per scenario, but the server may start after the UI.
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => fetch(t.baseUrl + "/projection/registration").then(r => {
+      if (!r.ok) throw new Error("registration unavailable");
+      return r.json();
+    }).then(r => { if (!cancelled) { setRegistration(r); setFootprints(r.occlusions ?? {}); } }).catch(() => { if (!cancelled) setRegistration(null); });
+    void load();
+    const id = window.setInterval(load, 2000);
+    return () => { cancelled = true; window.clearInterval(id); };
+  }, [t]);
+
   useEffect(() => {
     let cancelled = false;
     let timer: number | undefined;
@@ -147,6 +161,7 @@ export function useLiveWorld({ pollHealth = false }: { pollHealth?: boolean } = 
           snapRef.current = e.payload;
           knownVersion.current = freshConnection ? e.payload.world_version : Math.max(knownVersion.current, e.payload.world_version);
           setSnapshot(e.payload);
+          if (e.payload.phase === "ready") { setPhysicalFeedback([]); setFootprints({}); }
           if (restarted) {
             reacted.current.clear();
             setReactions([]);
@@ -156,6 +171,17 @@ export function useLiveWorld({ pollHealth = false }: { pollHealth?: boolean } = 
         }
         case "vision.status": {
           const now = Date.now();
+          const feedback = e.payload.physical_feedback;
+          if (feedback) {
+            if (feedback.footprint_key && feedback.print_footprint) setFootprints(old => {
+              const next = { ...old };
+              if (feedback.print_footprint!.length) next[feedback.footprint_key!] = feedback.print_footprint!;
+              else delete next[feedback.footprint_key!];
+              return next;
+            });
+            setPhysicalFeedback(list => [...list.filter(f => f.until > now && f.track_id !== feedback.track_id), { ...feedback, until: now + (feedback.status === "pending" ? PENDING_TTL_MS : 1800) }]);
+            push("vision", `${feedback.track_id} ${feedback.status}: ${feedback.rejection_reason ?? feedback.world_token_id ?? ""}`);
+          }
           setObservations((m) => {
             const next = new Map([...m].filter(([, o]) => now - o.seenAt < PENDING_TTL_MS));
             for (const o of e.payload.observations) next.set(o.token_id, { ...o, seenAt: now });
@@ -305,10 +331,10 @@ export function useLiveWorld({ pollHealth = false }: { pollHealth?: boolean } = 
     [t, push, record],
   );
 
-  const suggest = useCallback(async () => {
+  const suggest = useCallback(async (goal = "needs_served", provenance = "operator_manual") => {
     try {
-      const r = await t.suggest("needs_served");
-      push(r.has_suggestion ? "accepted" : "rejected", `[operator_manual] suggest bridge → ${r.has_suggestion ? `site ${r.suggestion?.site_id}` : r.rejection_reason ?? "no_suggestion"}`);
+      const r = await t.suggest(goal);
+      push(r.has_suggestion ? "accepted" : "rejected", `[${provenance}] suggest bridge (${goal}) → ${r.has_suggestion ? `site ${r.suggestion?.site_id}` : r.rejection_reason ?? "no_suggestion"}`);
       return r;
     } catch (err) {
       push("warning", `POST /plan/suggest failed: ${(err as Error).message}`);
@@ -327,11 +353,16 @@ export function useLiveWorld({ pollHealth = false }: { pollHealth?: boolean } = 
 
   const clearPending = useCallback((tokenIds?: string[]) => {
     setObservations((m) => (tokenIds ? new Map([...m].filter(([id]) => !tokenIds.includes(id))) : new Map()));
+    setPhysicalFeedback(list => list.filter(f => f.status !== "pending" || (tokenIds && !tokenIds.includes(f.track_id))));
   }, []);
 
   const scenarioMismatch = !!snapshot && snapshot.scenario_id !== SCENARIO_ID;
 
   return {
+    registration,
+    physicalFeedback,
+    footprints,
+    controlRun: t.controlRun,
     apiUrl: t.baseUrl,
     scenarioId: SCENARIO_ID,
     snapshot: scenarioMismatch ? null : snapshot,

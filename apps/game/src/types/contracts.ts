@@ -180,6 +180,58 @@ export interface WorldSnapshot {
   mode?: "prevention" | "relief";
   /** Game score, objectives and results from backend/world/game.py (pure function of state). */
   game?: GameState | null;
+  /** Helpful placements previewed through the reducer (backend/world/mission.py). */
+  mission?: MissionGuide | null;
+}
+
+export type NeedCounts = Record<ServiceKind, number>;
+
+/** One placement previewed by backend/world/mission.py with the real rules. */
+export interface MissionOption {
+  piece: TokenType;
+  site_id: string;
+  board_uv: UV;
+  rotation_deg?: number | null;
+  edge_id?: string | null;
+  resource_cost: number;
+  allowed: boolean;
+  rejection_reason?: string | null;
+  score_gain?: number;
+  communities_gain?: number;
+  needs_met?: NeedCounts;
+  people_reached?: NeedCounts;
+  reconnects?: string[];
+  helps?: boolean;
+  /** Set when the preview MOVES an already-placed bridge (lift, then place here). */
+  move_token_id?: string | null;
+}
+
+export interface Lifeline {
+  population_id: string;
+  reachable: boolean;
+  edge_ids: string[];
+  board_uv: UV[];
+}
+
+export interface MissionGuide {
+  isolated: { id: string; name: string; people_model: number }[];
+  populations: { id: string; name: string; people_model: number; depot_reachable?: boolean | null; unmet: Partial<Record<ServiceKind, number | null>> }[];
+  depot: { site_id: string; name: string } | null;
+  lifelines: Lifeline[];
+  crossing: MissionOption | null;
+  crossing_restored: { token_id: string; site_id: string } | null;
+  services: MissionOption[];
+  services_placed: { token_id: string; piece: TokenType; site_id: string }[];
+  opportunity: MissionOption | null;
+  stage: number;
+  stage_count: number;
+  stage_note?: string | null;
+  /** The same stage with no response pieces: the game's no-response baseline. */
+  baseline?: {
+    lifelines: Lifeline[];
+    populations: { id: string; name: string; depot_reachable?: boolean | null; unmet: Partial<Record<ServiceKind, number | null>> }[];
+    blocked_edge_ids: string[];
+  } | null;
 }
 
 /** Outcome metrics the game layer compares against the no-response baseline. */
@@ -318,9 +370,38 @@ export interface BranchComparison {
   metric_provenance: string;
 }
 
+export interface PhysicalFeedback {
+  event_id: string;
+  track_id: string;
+  session_id: string;
+  accepted: boolean;
+  applied: boolean;
+  status: "pending" | "accepted" | "rejected" | "removed";
+  board_uv: UV | null;
+  rejection_reason: string | null;
+  /** Classified piece ("food_station" for the food piece), when the camera reported one. */
+  piece_class?: "bridge" | "hospital" | "shelter" | "food_station" | null;
+  world_token_id: string | null;
+  footprint_key?: string;
+  print_footprint?: UV[];
+}
+
+export interface ProjectionRegistration {
+  ready: boolean;
+  /** print<->world is measured (projector can draw), even if camera markers are not. */
+  mapping_ready?: boolean;
+  reason?: string | null;
+  print_to_world?: number[];
+  world_to_print?: number[];
+  board?: { width_mm: number; height_mm: number };
+  markers?: { id: number; center_uv: UV }[];
+  marker_size_mm?: number;
+  occlusions?: Record<string, UV[]>;
+}
+
 export type Envelope =
   | { type: "world.snapshot"; seq: number; sent_at: string; payload: WorldSnapshot }
-  | { type: "vision.status"; seq: number; sent_at: string; payload: { observations: ObjectObservation[]; latency_ms?: number } }
+  | { type: "vision.status"; seq: number; sent_at: string; payload: { observations: ObjectObservation[]; latency_ms?: number; physical_feedback?: PhysicalFeedback } }
   | { type: "narration"; seq: number; sent_at: string; payload: { text: string; source: "gemini" | "template" } }
   | { type: "warning"; seq: number; sent_at: string; payload: { code: string; message: string } }
   | { type: "server.hello"; seq?: number; sent_at?: string; payload: { status: string } };

@@ -647,6 +647,126 @@
       "unresolved": []
     }
   },
+  "mission": {
+    "isolated": [],
+    "populations": [
+      {
+        "id": "people_east",
+        "name": "people east",
+        "people_model": 8,
+        "depot_reachable": true,
+        "unmet": {
+          "food": 0,
+          "medical": 0,
+          "refuge": 0
+        }
+      }
+    ],
+    "depot": null,
+    "lifelines": [
+      {
+        "population_id": "people_east",
+        "reachable": true,
+        "edge_ids": [
+          "east_village",
+          "crossing_east_road",
+          "depot_west"
+        ],
+        "board_uv": [
+          [
+            0.75,
+            0.4
+          ],
+          [
+            0.6,
+            0.5
+          ],
+          [
+            0.35,
+            0.5
+          ],
+          [
+            0.1,
+            0.5
+          ]
+        ]
+      }
+    ],
+    "crossing": null,
+    "crossing_restored": {
+      "token_id": "bridge",
+      "site_id": "crossing_east"
+    },
+    "services": [],
+    "services_placed": [
+      {
+        "token_id": "hospital",
+        "piece": "hospital",
+        "site_id": "medical_site_west"
+      },
+      {
+        "token_id": "food_shelter",
+        "piece": "food_shelter",
+        "site_id": "food_site_west"
+      },
+      {
+        "token_id": "shelter",
+        "piece": "shelter",
+        "site_id": "shelter_site_west"
+      }
+    ],
+    "opportunity": null,
+    "baseline": {
+      "lifelines": [
+        {
+          "population_id": "people_east",
+          "reachable": false,
+          "edge_ids": [
+            "east_village",
+            "crossing_east_road",
+            "depot_west"
+          ],
+          "board_uv": [
+            [
+              0.75,
+              0.4
+            ],
+            [
+              0.6,
+              0.5
+            ],
+            [
+              0.35,
+              0.5
+            ],
+            [
+              0.1,
+              0.5
+            ]
+          ]
+        }
+      ],
+      "populations": [
+        {
+          "id": "people_east",
+          "name": "people east",
+          "depot_reachable": false,
+          "unmet": {
+            "food": 8,
+            "medical": 2,
+            "refuge": 8
+          }
+        }
+      ],
+      "blocked_edge_ids": [
+        "crossing_east_road",
+        "crossing_north_road"
+      ]
+    },
+    "stage": 1,
+    "stage_count": 3,
+    "stage_note": null
+  },
   "ghost_suggestion": null,
   "provenance_label": "Schematic educational fixture; geography, disruptions, capacities and people are illustrative, not historical measurements.",
   "data_mode": "SCHEMATIC"

@@ -7,6 +7,8 @@ routes, never scores, and never invents a class. Classification is Lane C's
 
 ## Setup
 
+The integrated game path is documented in [PHYSICAL_INTEGRATION](../docs/PHYSICAL_INTEGRATION.md). Install the root `requirements.txt` for the Perceptron SDK as well as this package's CV dependencies. `perception.fusion:create_classifier` implements the service's ClassifierPort; the gateway adapter now lives at `/perception/physical`.
+
 ```
 python -m venv .venv
 .venv/bin/pip install -r perception/requirements.txt
@@ -22,12 +24,10 @@ python -m venv .venv
 .venv/bin/python -m perception.service --source http://192.168.1.20:4747/video      # DroidCam MJPEG
 .venv/bin/python -m perception.service --source 1 --record assets/live_captures/run1  # record evidence
 .venv/bin/python -m perception.service --source assets/live_captures/run1/frames      # replay it
-.venv/bin/python -m perception.service --observe-url http://localhost:8000/<adapter> --status-url http://localhost:8000/perception/status
-.venv/bin/python -m perception.service --classifier perception.classifier_port:create_classifier   # Dev 2's Perceptron classifier
-.venv/bin/python -m perception.service --control-port 8011                                           # operator/adapter control API
+.venv/bin/python -m perception.service --classifier perception.fusion:create_classifier --observe-url http://localhost:8010/perception/physical --status-url http://localhost:8010/perception/status --control-port 8011
 ```
 
-`--observe-url` must point at the **shared observation adapter**. The retained gateway's
+`--observe-url` must point at the physical adapter (`/perception/physical`). The retained gateway's
 `/perception/observe` takes the legacy `ObjectObservation` and turns every confirmed
 observation into a placement; the service refuses that URL (see `docs/INTEGRATION_CONTRACT.md`).
 
@@ -86,20 +86,18 @@ manual actions; `reject` is for diagnostics.
 
 ## Lane C seam (Dev 2's classifier)
 
-`perception/classifier_port.py` wraps Dev 2's `PieceClassifier` in the `ClassifierPort`
-interface, so there is exactly one tracker, one lifecycle and one emitter of
-`PhysicalObservation` (spec 1 and 6.6). Through the port:
+`perception/fusion.py` wraps Dev 2's `PieceClassifier` in the `ClassifierPort`
+interface (`perception.fusion:create_classifier`; `perception.classifier_port` is an alias), so there
+is exactly one tracker, one lifecycle and one emitter of `PhysicalObservation` (spec 1 and 6.6).
+Through the port:
 
-- model results (`class_source == "perceptron"`) pass through with their confidence;
-- colour-fallback results keep their class as a labelled hint but their confidence is
-  withheld, so they can never reach HIGH on their own (spec 5: never fabricate a model
+- only `class_source == "perceptron"` results count; the SDK reports no numeric confidence, so
+  three distinct camera frames must agree before a result is valid (`agreement_frames`), and
+  the confidence scorer treats that consensus as the HIGH-band evidence, labelled as such;
+- colour-fallback results are never valid classes (spec 5: never fabricate a model
   confidence; spec 7.9: degraded, not pretend);
-- valid-but-unknown answers leave the track asking again.
-
-`perception/fusion.py` (Dev 2) carries its own `TrackedPiece` lifecycle and observation
-emitter. That is a second tracker stack, which the spec forbids, and it currently does not
-import (it expects fields `PhysicalObservation` does not have). It is not used by the
-service; the port above is the integration path. Flagged for Lane C review.
+- a bounded request queue and a single worker keep the camera loop free; the port reports
+  classify latency p50/p95 in status.
 
 ## Control API (operator / adapter)
 

@@ -22,14 +22,16 @@ from __future__ import annotations
 
 import argparse
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import importlib
+import os
 import json
 from pathlib import Path
 import sys
 import time
 from typing import Any, Protocol
 import uuid
+from queue import SimpleQueue
 
 import numpy as np
 
@@ -196,11 +198,17 @@ class PerceptionService:
         self.classifier: ClassifierPort = classifier or NullClassifier()
         self.sink = FanoutSink(list(sinks or []))
         self.session_id = self._new_session_id()
+        self.world_epoch = None
+        self.adapter_feedback = SimpleQueue()
+        self.backend_input_open = None
+        self.resume_tracks = set()
         self.sites = load_sites(cfg.service.sites_path)
         self.roi_archiver = RoiArchiver(cfg.service.save_rois_dir) if cfg.service.save_rois_dir else None
         self.recorder: Recorder | None = None
         self.status_poster: HttpPoster | None = HttpPoster(cfg.service.status_url, timeout_s=cfg.service.http_timeout_s,
                                                            queue_size=16, name="status-sink") if cfg.service.status_url else None
+        if self.status_poster:
+            self.status_poster.on_response = lambda payload, response: self.adapter_feedback.put({"integration": response.get("status", {}).get("integration")}) if isinstance(response, dict) else None
         self.camera: CameraWorker | None = None
         self.control: ControlServer | None = None
         if cfg.service.control_port is not None:
@@ -277,6 +285,7 @@ class PerceptionService:
         self.track_views.clear()
         self.last_band.clear()
         self.last_candidate_emit_ms.clear()
+        self.resume_tracks.clear()
         self.session_id = self._new_session_id()
         return self.session_id
 
@@ -307,6 +316,21 @@ class PerceptionService:
 
     def handle_adapter_feedback(self, feedback: dict[str, Any]) -> None:
         """Proposed adapter response: {track_id, accepted, world_token_id?, rejection_reason?}."""
+        self._apply_adapter_feedback(feedback)
+
+    def _apply_adapter_feedback(self, feedback: dict[str, Any]) -> None:
+        integration = feedback.get("integration")
+        if integration and integration.get("world_epoch") != self.world_epoch:
+            self.reset_session()
+            self.world_epoch = integration["world_epoch"]
+        if integration and "input_open" in integration:
+            if integration["input_open"] and self.backend_input_open is False:
+                self.resume_tracks.update(self.tracker.tracks)
+            self.backend_input_open = integration["input_open"]
+        if feedback.get("world_epoch") and feedback["world_epoch"] != self.world_epoch:
+            return
+        if feedback.get("session_id") and feedback["session_id"] != self.session_id:
+            return
         track_id = feedback.get("track_id")
         if not track_id:
             return
@@ -316,7 +340,7 @@ class PerceptionService:
                 self.bind_world_token(str(track_id), str(token))
             if feedback.get("removed"):
                 self.unbind_world_token(str(track_id))
-        else:
+        elif feedback.get("status") != "pending":
             self.mark_rejected(str(track_id), str(feedback.get("rejection_reason") or "rejected"))
 
     def apply_operator_class(self, track_id: str, piece_class: str, operator: str = "operator") -> bool:
@@ -356,6 +380,8 @@ class PerceptionService:
         t0 = time.perf_counter()
         if self.control is not None:
             self.control.apply_pending()
+        while not self.adapter_feedback.empty():
+            self._apply_adapter_feedback(self.adapter_feedback.get_nowait())
         now = frame.captured_at_ms
         self.last_frame = frame
         image = frame.image
@@ -395,7 +421,7 @@ class PerceptionService:
 
         # Tracks age only while the board is actually in view: a held registration with zero
         # visible markers (camera covered/unplugged) must not turn into invented removals.
-        registration_ok = bool(reg.board_in_view and reference_ok and not self.paused)
+        registration_ok = bool(reg.board_in_view and reference_ok and not self.paused and not reg.held and not reg.degraded and self.backend_input_open is not False)
         if reg.valid and not reg.board_in_view:
             self.last_candidates = []
         t_stage = time.perf_counter()
@@ -409,6 +435,19 @@ class PerceptionService:
             observations.extend(self._apply_classifier_results(reg, frame, now))
             if warped is not None:
                 self._request_classifications(warped, frame, now)
+            emitted = {o.track_id for o in observations if o.lifecycle != Lifecycle.CANDIDATE}
+            self.resume_tracks.difference_update(emitted)
+            for track_id in list(self.resume_tracks):
+                track = self.tracker.tracks.get(track_id)
+                if track is None:
+                    self.resume_tracks.discard(track_id)
+                elif track.state == TrackState.STABLE and track.frames_missing == 0 and not track.needs_classification:
+                    event = self.tracker.request_reemit(track_id, now, frame.frame_id, note="backend_resume")
+                    if event:
+                        observation = self._observation_from_event(event, reg, frame)
+                        if observation.confidence_band == ConfidenceBand.HIGH:
+                            observations.append(observation)
+                            self.resume_tracks.discard(track_id)
             self._stage_times["classify"].append(time.perf_counter() - t_stage)
 
         for obs in observations:
@@ -571,6 +610,7 @@ class PerceptionService:
             appearance=None if event.candidate is None else event.candidate.appearance,
             frame_provenance=frame.provenance,
             reason=reason,
+            world_epoch=self.world_epoch,
         )
         if event.lifecycle in (Lifecycle.PLACED, Lifecycle.MOVED):
             self.last_band[track.track_id] = scored.band
@@ -580,7 +620,7 @@ class PerceptionService:
         out = []
         interval = self.cfg.service.candidate_emit_interval_ms
         for track in list(self.tracker.tracks.values()):
-            if track.emitted or track.frames_missing > 0 or track.state == TrackState.RETIRED:
+            if (track.emitted and track.state != TrackState.MOVING) or track.frames_missing > 0 or track.state == TrackState.RETIRED:
                 continue
             last = self.last_candidate_emit_ms.get(track.track_id)
             if last is not None and now - last < interval:
@@ -595,13 +635,15 @@ class PerceptionService:
     def _apply_classifier_results(self, reg: RegistrationState, frame: Frame, now: int) -> list[PhysicalObservation]:
         out = []
         for result in self.classifier.poll():
+            previous = self.tracker.tracks.get(result.track_id)
+            previous_class = previous.classification.piece_class if previous else None
             applied = self.tracker.apply_classification(result, now)
             track = self.tracker.tracks.get(result.track_id)
             if not applied or track is None or not result.valid:
                 continue
             # A class arriving after the track was already emitted: re-emit so the adapter can act,
             # but only if the earlier emission could not be acted on (not HIGH) and it is still there.
-            if track.emitted and track.state == TrackState.STABLE and self.last_band.get(track.track_id) != ConfidenceBand.HIGH:
+            if track.emitted and track.state == TrackState.STABLE and (self.last_band.get(track.track_id) != ConfidenceBand.HIGH or previous_class != result.piece_class):
                 lifecycle = Lifecycle.MOVED if track.bound else Lifecycle.PLACED
                 event = self.tracker.request_reemit(track.track_id, now, frame.frame_id, note="class_update")
                 if event is not None:
@@ -633,6 +675,7 @@ class PerceptionService:
             self.classifier.submit(request)
 
     def _emit(self, obs: PhysicalObservation) -> None:
+        obs = replace(obs, world_epoch=self.world_epoch)
         self.observations_emitted += 1
         self.last_observation = obs
         self.sink.emit(obs)
@@ -1048,6 +1091,8 @@ def main(argv: list[str] | None = None) -> int:
         pass
     args = build_parser().parse_args(argv)
     cfg = config_from_args(args)
+    if not args.registration and os.environ.get("FLOODSHIFT_BOARD_REGISTRATION"):
+        cfg.board.registration_path = os.environ["FLOODSHIFT_BOARD_REGISTRATION"]
     if args.list_cameras:
         probes = enumerate_cameras(cfg.camera.probe_max_index, cfg.camera.width, cfg.camera.height, cfg.camera.probe_timeout_s)
         for p in probes:
@@ -1078,7 +1123,7 @@ def main(argv: list[str] | None = None) -> int:
             if isinstance(response, dict):
                 feedback = dict(response)
                 feedback.setdefault("track_id", payload.get("track_id"))
-                service.handle_adapter_feedback(feedback)
+                service.adapter_feedback.put(feedback)
         service.sink.add(HttpSink(cfg.service.observe_url, timeout_s=cfg.service.http_timeout_s,
                                   queue_size=cfg.service.sink_queue_size, on_response=on_response))
     if not sinks and not cfg.service.observe_url:

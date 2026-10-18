@@ -1,32 +1,34 @@
 {
   "kind": "floodshift.ui.live-test",
-  "verified_at": "2026-10-18T11:51:24.395Z",
+  "verified_at": "2026-10-18T15:00:25.658Z",
   "scenario_id": "nepal_rasuwa_hot_v1",
-  "execution": "React test renderer + real HTTP/WebSocket/BroadcastChannel + real monotonic 75-second clock",
+  "execution": "React test renderer + real HTTP/WebSocket/BroadcastChannel + real monotonic 75-second clock; controlled PhysicalObservation inputs and test calibration, not live detections",
   "browser_visual_check": "NOT RUN: no browser session available",
   "physical_board_check": "NOT RUN",
   "assertions": [
     "both routes mounted",
+    "START-only laptop view",
+    "operator tools preserve clock",
     "digital START and two population records",
-    "pause/resume",
-    "manual bridge place/move/remove/retry",
-    "duplicate placement rejected",
+    "pause/resume acknowledges backend input gate",
+    "controlled physical pending/place/move/remove reaches projector",
+    "manual correction and duplicate rejection",
     "three facilities accepted",
-    "exactly one timed surge rejected last_stage",
-    "input closed at 70s",
+    "one timed surge accepted: stage 2 closes the hillside road",
+    "backend physical input closed and final state captured at 70s",
     "finished at 75s",
     "backend-derived results",
-    "replay clears world"
+    "replay clears world and epoch"
   ],
   "frames": [
     {
       "label": "digital_start_with_both_population_records",
-      "at": "2026-10-18T11:50:08.710Z",
-      "elapsed_ms": 0,
+      "at": "2026-10-18T14:59:09.960Z",
+      "elapsed_ms": 36.332600000000184,
       "phase": "WARNING",
       "projector_phase": "WARNING",
       "world_version": 4,
-      "projector_world_version": 3,
+      "projector_world_version": 4,
       "simulation_stage": 1,
       "surge": "not_due",
       "syncing": false,
@@ -64,8 +66,8 @@
     },
     {
       "label": "crossing_10s",
-      "at": "2026-10-18T11:50:19.195Z",
-      "elapsed_ms": 10007.3285,
+      "at": "2026-10-18T14:59:20.436Z",
+      "elapsed_ms": 10044.8272,
       "phase": "CROSSING",
       "projector_phase": "CROSSING",
       "world_version": 4,
@@ -106,9 +108,9 @@
       "blocked_roads": 3
     },
     {
-      "label": "bridge_accepted",
-      "at": "2026-10-18T11:50:19.307Z",
-      "elapsed_ms": 10112.304,
+      "label": "controlled_physical_bridge_accepted",
+      "at": "2026-10-18T14:59:20.769Z",
+      "elapsed_ms": 10376.5271,
       "phase": "CROSSING",
       "projector_phase": "CROSSING",
       "world_version": 5,
@@ -132,7 +134,55 @@
         {
           "type": "bridge",
           "site": "crossing_east",
+          "source": "replay"
+        },
+        {
+          "type": "person",
+          "site": "people_east",
           "source": "manual"
+        },
+        {
+          "type": "person",
+          "site": "people_west",
+          "source": "manual"
+        },
+        {
+          "type": "disaster_start",
+          "site": "start_pad",
+          "source": "manual"
+        }
+      ],
+      "open_routes": 0,
+      "blocked_roads": 2
+    },
+    {
+      "label": "controlled_physical_bridge_moved",
+      "at": "2026-10-18T14:59:20.936Z",
+      "elapsed_ms": 10581.3246,
+      "phase": "CROSSING",
+      "projector_phase": "CROSSING",
+      "world_version": 6,
+      "projector_world_version": 6,
+      "simulation_stage": 1,
+      "surge": "not_due",
+      "syncing": false,
+      "metrics": {
+        "people_reachable_for_medical": 0,
+        "people_reachable_for_food": 0,
+        "people_reachable_for_shelter": 0,
+        "unmet_food_model": 16,
+        "unmet_medical_model": 4,
+        "unmet_refuge_model": 16,
+        "blocked_roads": 2,
+        "resource_spent": 2,
+        "reachable_communities": 1,
+        "road_access_fraction": 0.8888888888888888
+      },
+      "token_sites": [
+        {
+          "type": "bridge",
+          "site": "crossing_west",
+          "source": "replay"
         },
         {
           "type": "person",
@@ -155,12 +205,12 @@
     },
     {
       "label": "bridge_moved",
-      "at": "2026-10-18T11:50:19.428Z",
-      "elapsed_ms": 10321.1617,
+      "at": "2026-10-18T14:59:21.390Z",
+      "elapsed_ms": 10990.2834,
       "phase": "CROSSING",
       "projector_phase": "CROSSING",
-      "world_version": 6,
-      "projector_world_version": 6,
+      "world_version": 9,
+      "projector_world_version": 9,
       "simulation_stage": 1,
       "surge": "not_due",
       "syncing": false,
@@ -203,12 +253,12 @@
     },
     {
       "label": "retry_after_move_and_remove_with_duplicate_rejected",
-      "at": "2026-10-18T11:50:19.677Z",
-      "elapsed_ms": 10537.8446,
+      "at": "2026-10-18T14:59:21.783Z",
+      "elapsed_ms": 11418.6221,
       "phase": "CROSSING",
       "projector_phase": "CROSSING",
-      "world_version": 8,
-      "projector_world_version": 8,
+      "world_version": 11,
+      "projector_world_version": 11,
       "simulation_stage": 1,
       "surge": "not_due",
       "syncing": false,
@@ -251,12 +301,12 @@
     },
     {
       "label": "relief_services_accepted",
-      "at": "2026-10-18T11:50:39.524Z",
-      "elapsed_ms": 30357.961900000002,
+      "at": "2026-10-18T14:59:40.823Z",
+      "elapsed_ms": 30487.691800000004,
       "phase": "RELIEF",
       "projector_phase": "RELIEF",
-      "world_version": 11,
-      "projector_world_version": 11,
+      "world_version": 14,
+      "projector_world_version": 14,
       "simulation_stage": 1,
       "surge": "not_due",
       "syncing": false,
@@ -313,27 +363,27 @@
       "blocked_roads": 2
     },
     {
-      "label": "surge_50s_truthful_last_stage_failure",
-      "at": "2026-10-18T11:50:59.195Z",
-      "elapsed_ms": 50008.082,
+      "label": "surge_50s_stage_2_accepted",
+      "at": "2026-10-18T15:00:00.587Z",
+      "elapsed_ms": 50158.943900000006,
       "phase": "SURGE",
       "projector_phase": "SURGE",
-      "world_version": 11,
-      "projector_world_version": 11,
-      "simulation_stage": 1,
-      "surge": "failed",
+      "world_version": 15,
+      "projector_world_version": 15,
+      "simulation_stage": 2,
+      "surge": "accepted",
       "syncing": false,
       "metrics": {
-        "people_reachable_for_medical": 16,
+        "people_reachable_for_medical": 0,
         "people_reachable_for_food": 16,
         "people_reachable_for_shelter": 16,
         "unmet_food_model": 6,
-        "unmet_medical_model": 1,
+        "unmet_medical_model": 4,
         "unmet_refuge_model": 6,
-        "blocked_roads": 2,
+        "blocked_roads": 3,
         "resource_spent": 5,
         "reachable_communities": 2,
-        "road_access_fraction": 0.8888888888888888
+        "road_access_fraction": 0.8333333333333334
       },
       "token_sites": [
         {
@@ -372,31 +422,31 @@
           "source": "manual"
         }
       ],
-      "open_routes": 11,
-      "blocked_roads": 2
+      "open_routes": 10,
+      "blocked_roads": 3
     },
     {
       "label": "results_70s",
-      "at": "2026-10-18T11:51:19.397Z",
-      "elapsed_ms": 70261.6978,
+      "at": "2026-10-18T15:00:20.525Z",
+      "elapsed_ms": 70142.8921,
       "phase": "RESULTS",
       "projector_phase": "RESULTS",
-      "world_version": 11,
-      "projector_world_version": 11,
-      "simulation_stage": 1,
-      "surge": "failed",
+      "world_version": 15,
+      "projector_world_version": 15,
+      "simulation_stage": 2,
+      "surge": "accepted",
       "syncing": false,
       "metrics": {
-        "people_reachable_for_medical": 16,
+        "people_reachable_for_medical": 0,
         "people_reachable_for_food": 16,
         "people_reachable_for_shelter": 16,
         "unmet_food_model": 6,
-        "unmet_medical_model": 1,
+        "unmet_medical_model": 4,
         "unmet_refuge_model": 6,
-        "blocked_roads": 2,
+        "blocked_roads": 3,
         "resource_spent": 5,
         "reachable_communities": 2,
-        "road_access_fraction": 0.8888888888888888
+        "road_access_fraction": 0.8333333333333334
       },
       "token_sites": [
         {
@@ -435,31 +485,31 @@
           "source": "manual"
         }
       ],
-      "open_routes": 11,
-      "blocked_roads": 2
+      "open_routes": 10,
+      "blocked_roads": 3
     },
     {
       "label": "finished_75s",
-      "at": "2026-10-18T11:51:24.289Z",
+      "at": "2026-10-18T15:00:25.541Z",
       "elapsed_ms": 75000,
       "phase": "RESULTS",
       "projector_phase": "RESULTS",
-      "world_version": 11,
-      "projector_world_version": 11,
-      "simulation_stage": 1,
-      "surge": "failed",
+      "world_version": 15,
+      "projector_world_version": 15,
+      "simulation_stage": 2,
+      "surge": "accepted",
       "syncing": false,
       "metrics": {
-        "people_reachable_for_medical": 16,
+        "people_reachable_for_medical": 0,
         "people_reachable_for_food": 16,
         "people_reachable_for_shelter": 16,
         "unmet_food_model": 6,
-        "unmet_medical_model": 1,
+        "unmet_medical_model": 4,
         "unmet_refuge_model": 6,
-        "blocked_roads": 2,
+        "blocked_roads": 3,
         "resource_spent": 5,
         "reachable_communities": 2,
-        "road_access_fraction": 0.8888888888888888
+        "road_access_fraction": 0.8333333333333334
       },
       "token_sites": [
         {
@@ -498,17 +548,17 @@
           "source": "manual"
         }
       ],
-      "open_routes": 11,
-      "blocked_roads": 2
+      "open_routes": 10,
+      "blocked_roads": 3
     },
     {
       "label": "replay_reset_confirmed",
-      "at": "2026-10-18T11:51:24.395Z",
+      "at": "2026-10-18T15:00:25.658Z",
       "elapsed_ms": 0,
       "phase": "IDLE",
       "projector_phase": "IDLE",
-      "world_version": 12,
-      "projector_world_version": 12,
+      "world_version": 16,
+      "projector_world_version": 16,
       "simulation_stage": 0,
       "surge": "not_due",
       "syncing": false,
@@ -531,86 +581,149 @@
   ],
   "websocket_snapshots": [
     {
-      "at": "2026-10-18T11:50:08.586Z",
+      "at": "2026-10-18T14:59:09.778Z",
       "version": 0,
       "phase": "ready",
       "stage": 0
     },
     {
-      "at": "2026-10-18T11:50:08.586Z",
+      "at": "2026-10-18T14:59:09.798Z",
       "version": 1,
       "phase": "ready",
       "stage": 0
     },
     {
-      "at": "2026-10-18T11:50:08.624Z",
+      "at": "2026-10-18T14:59:09.818Z",
       "version": 2,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:08.646Z",
+      "at": "2026-10-18T14:59:09.854Z",
       "version": 3,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:08.671Z",
+      "at": "2026-10-18T14:59:09.899Z",
       "version": 4,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:19.207Z",
+      "at": "2026-10-18T14:59:20.673Z",
       "version": 5,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:19.329Z",
+      "at": "2026-10-18T14:59:20.841Z",
       "version": 6,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:19.453Z",
+      "at": "2026-10-18T14:59:21.006Z",
       "version": 7,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:19.554Z",
+      "at": "2026-10-18T14:59:21.166Z",
       "version": 8,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:39.169Z",
+      "at": "2026-10-18T14:59:21.346Z",
       "version": 9,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:39.297Z",
+      "at": "2026-10-18T14:59:21.465Z",
       "version": 10,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:39.437Z",
+      "at": "2026-10-18T14:59:21.604Z",
       "version": 11,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:51:24.309Z",
+      "at": "2026-10-18T14:59:40.548Z",
       "version": 12,
+      "phase": "disaster_active",
+      "stage": 1
+    },
+    {
+      "at": "2026-10-18T14:59:40.675Z",
+      "version": 13,
+      "phase": "disaster_active",
+      "stage": 1
+    },
+    {
+      "at": "2026-10-18T14:59:40.796Z",
+      "version": 14,
+      "phase": "disaster_active",
+      "stage": 1
+    },
+    {
+      "at": "2026-10-18T15:00:00.470Z",
+      "version": 15,
+      "phase": "disaster_active",
+      "stage": 2
+    },
+    {
+      "at": "2026-10-18T15:00:25.613Z",
+      "version": 16,
       "phase": "ready",
       "stage": 0
     }
   ],
   "final_results": {
-    "headline": "RESPONSE COMPLETE",
+    "headline": "MISSION COMPLETE",
+    "impact": [
+      {
+        "id": "residents",
+        "value": "16/16",
+        "label": "Residents reach essential services"
+      },
+      {
+        "id": "services",
+        "value": "3",
+        "label": "Services & crossings restored"
+      },
+      {
+        "id": "improvement",
+        "value": "+56%",
+        "label": "Needs met vs. no response"
+      }
+    ],
+    "decisions": [
+      {
+        "label": "Temporary bridge",
+        "effective": true,
+        "text": "reconnected 1 community, met 2 refuge needs, met 2 food needs"
+      },
+      {
+        "label": "Food & water station",
+        "effective": true,
+        "text": "met 10 food needs"
+      },
+      {
+        "label": "Hospital",
+        "effective": false,
+        "text": "no measured effect at the end"
+      },
+      {
+        "label": "Shelter",
+        "effective": true,
+        "text": "met 10 refuge needs"
+      }
+    ],
     "rows": [
       {
         "id": "refuge_access",
@@ -628,8 +741,9 @@
       {
         "id": "medical_met",
         "label": "MEDICAL NEEDS MET",
-        "value": "3 / 4",
-        "detail": "model need units"
+        "value": "0 / 4",
+        "detail": "model need units",
+        "tone": "bad"
       },
       {
         "id": "routes_restored",
@@ -641,31 +755,31 @@
       {
         "id": "baseline_change",
         "label": "CHANGE VS. NO-RESPONSE BASELINE",
-        "value": "−23",
-        "detail": "unmet need units: 36 with no response → 13 now",
+        "value": "−20",
+        "detail": "unmet need units: 36 with no response → 16 now",
         "tone": "good"
       },
       {
         "id": "unmet_remaining",
         "label": "UNMET NEEDS REMAINING",
-        "value": "13 / 36",
+        "value": "16 / 36",
         "detail": "model need units",
         "tone": "bad"
       }
     ],
     "score": {
-      "value": 419,
+      "value": 263,
       "label": "Game score — compares strategies in this educational model; not a real outcome metric"
     },
     "unresolved": [
+      "Hospital (medical_site_west) changed no measured outcome",
       "6 food need units remain unmet — facility capacity is exhausted",
-      "1 medical need units remain unmet — facility capacity is exhausted",
+      "4 medical need units remain unmet — no open route for people_east, people_west",
       "6 refuge need units remain unmet — facility capacity is exhausted"
     ],
     "improved": [
-      "Temporary bridge (crossing_east): 2 food, 1 medical, 2 refuge, 1 community reconnected need units served",
+      "Temporary bridge (crossing_east): 2 food, 2 refuge, 1 community reconnected need units served",
       "Food & water station (food_site_west): 10 food need units served",
-      "Hospital (medical_site_west): 3 medical need units served",
       "Shelter (shelter_site_west): 10 refuge need units served"
     ],
     "unit": "model people",

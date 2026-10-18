@@ -103,6 +103,80 @@ def by_lifecycle(observations, lifecycle: Lifecycle):
     return [o for o in observations if o.lifecycle is lifecycle]
 
 
+def test_backend_epoch_feedback_resets_binding_on_the_camera_thread(tmp_path, scene):
+    board, reg, cam = scene
+    svc = PerceptionService(fast_config(tmp_path, reg), classifier=NullClassifier(), sinks=[])
+    try:
+        _, t = feed(svc, [cam(board.empty)] * 5)
+        _, t = feed(svc, [cam(board.with_pieces([BRIDGE]))] * 10, start_frame=6, t0=t)
+        old_session = svc.session_id
+        svc.tracker.bind_world_token("t1", "old-world-token")
+        svc.adapter_feedback.put({"integration": {"world_epoch": "new-backend-reset"}})
+        assert svc.session_id == old_session
+        feed(svc, [cam(board.with_pieces([BRIDGE]))], start_frame=20, t0=t)
+        assert svc.world_epoch == "new-backend-reset" and svc.session_id != old_session
+        assert all(t.world_token_id is None for t in svc.tracker.tracks.values())
+    finally:
+        svc.stop()
+
+
+def test_distinct_frame_perceptron_consensus_reaches_high_band_without_model_probability(tmp_path, scene):
+    from perception.fusion import PerceptronClassifierPort
+
+    class ControlledSDKClassifier:
+        def classify_sync(self, track, crop):
+            return ClassificationResult(track, PieceClass.BRIDGE, "perceptron", None, True)
+        def get_telemetry(self):
+            return {"perceptron": {"is_available": True}}
+        def shutdown(self):
+            pass
+
+    board, reg, cam = scene
+    port = PerceptronClassifierPort(ControlledSDKClassifier())
+    svc = PerceptionService(fast_config(tmp_path, reg), classifier=port, sinks=[])
+    try:
+        _, t = feed(svc, [cam(board.empty)] * 5)
+        high = []
+        image = cam(board.with_pieces([BRIDGE]))
+        for frame in range(6, 86):
+            out, t = feed(svc, [image], start_frame=frame, t0=t)
+            high.extend(o for o in out if o.confidence_band == ConfidenceBand.HIGH)
+            if high:
+                break
+            time.sleep(.02)
+        assert high and high[-1].piece_class == PieceClass.BRIDGE
+        assert high[-1].detection_confidence is None
+        assert "agreeing Perceptron frames" in high[-1].reason
+    finally:
+        svc.stop()
+
+
+def test_backend_pause_freezes_tracks_then_resynchronizes_movement_and_lifting(tmp_path, scene):
+    board, reg, cam = scene
+    svc = PerceptionService(fast_config(tmp_path, reg), classifier=RecordingClassifier(), sinks=[])
+    try:
+        svc.adapter_feedback.put({"integration": {"world_epoch": "test-epoch", "input_open": True}})
+        empty, piece = cam(board.empty), cam(board.with_pieces([BRIDGE]))
+        _, t = feed(svc, [empty]*5)
+        placed, t = feed(svc, [piece]*10, start_frame=6, t0=t)
+        track_id = by_lifecycle(placed, Lifecycle.PLACED)[-1].track_id
+        svc.bind_world_token(track_id, "accepted-token")
+        svc.adapter_feedback.put({"integration": {"world_epoch": "test-epoch", "input_open": False}})
+        paused, t = feed(svc, [piece]*5, start_frame=20, t0=t)
+        assert paused == []
+        svc.adapter_feedback.put({"integration": {"world_epoch": "test-epoch", "input_open": True}})
+        resumed, t = feed(svc, [piece]*5, start_frame=30, t0=t)
+        assert any(o.lifecycle == Lifecycle.MOVED and o.track_id == track_id for o in resumed)
+        svc.adapter_feedback.put({"integration": {"world_epoch": "test-epoch", "input_open": False}})
+        paused, t = feed(svc, [empty]*8, start_frame=40, t0=t)
+        assert paused == [] and track_id in svc.tracker.tracks
+        svc.adapter_feedback.put({"integration": {"world_epoch": "test-epoch", "input_open": True}})
+        resumed, t = feed(svc, [empty]*8, start_frame=50, t0=t)
+        assert any(o.lifecycle == Lifecycle.REMOVED and o.track_id == track_id for o in resumed)
+    finally:
+        svc.stop()
+
+
 @pytest.fixture
 def scene(tmp_path):
     board = SyntheticBoard()

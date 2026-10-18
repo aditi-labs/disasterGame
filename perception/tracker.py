@@ -55,6 +55,7 @@ class ClassInfo:
     appearance_at: Appearance | None = None
     latency_ms: int | None = None
     evidence: str | None = None
+    agreement_frames: int = 0
 
 
 @dataclass
@@ -225,7 +226,7 @@ class PieceTracker:
         if track is not None:
             track.rejected_reason = reason
             track.rejected_at_ms = now_ms
-            track.world_token_id = None
+            # A rejected MOVE keeps its accepted token at the previous world site.
 
     def request_reemit(self, track_id: str, now_ms: int, frame_id: int, note: str = "operator_retry") -> TrackEvent | None:
         """Operator retry without touching the piece: re-emit PLACED/MOVED for a still track."""
@@ -247,7 +248,7 @@ class PieceTracker:
         track = self.tracks.get(result.track_id)
         if track is None:
             return False
-        if track.classification_pending_request and result.request_id and \
+        if result.request_id and \
                 result.request_id != track.classification_pending_request:
             return False  # stale answer for an older request
         track.classification_pending_request = None
@@ -262,7 +263,7 @@ class PieceTracker:
             return True
         track.classification = ClassInfo(result.piece_class, result.class_source, result.confidence, True, now_ms,
                                          track.last_candidate.appearance if track.last_candidate else None,
-                                         result.latency_ms, result.evidence)
+                                         result.latency_ms, result.evidence, result.agreement_frames)
         track.needs_classification = False
         return True
 
@@ -352,6 +353,7 @@ class PieceTracker:
                 _appearance_distance(previous_candidate.appearance, cand.appearance) > self.cfg.appearance_change_threshold:
             track.needs_classification = True
             track.classification_reason = "appearance_changed"
+            track.classification_pending_request = None
 
         if self._is_stable(track, now_ms):
             if not track.emitted:

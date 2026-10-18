@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from perception.camera import droidcam_url, list_cameras
-from perception.classifier_port import PerceptronClassifierPort
+from perception.fusion import PerceptronClassifierPort
 from perception.config import PerceptionConfig
 from perception.events import ClassificationResult, ConfidenceBand, Lifecycle, PhysicalLifecycle, PieceClass, ROIRequest
 from perception.service import NullClassifier, PerceptionService, observe_url_is_legacy_gateway
@@ -20,91 +20,11 @@ from .conftest import SyntheticBoard, camera_homography, make_registration, rend
 from .test_service import BRIDGE, HOSPITAL, by_lifecycle, fast_config, feed
 from .test_tracker import CFG as TRACKER_CFG, cand, run
 
-
-class FakeDev2Classifier:
-    """Mimics perception.classifier.PieceClassifier.classify_async(track_id, roi, callback)."""
-
-    def __init__(self, result_factory):
-        self.result_factory = result_factory
-        self.calls = 0
-        self._adapter = type("A", (), {"is_available": False, "get_telemetry": lambda self: {"status": "disconnected"}})()
-
-    def classify_async(self, track_id, roi_image, callback=None):
-        self.calls += 1
-        assert roi_image.ndim == 3
-        callback(track_id, self.result_factory(track_id))
-
-    def shutdown(self):
-        self.shut = True
-
-
 def _roi(track_id="t1", request_id="r1") -> ROIRequest:
     return ROIRequest(request_id=request_id, session_id="s", track_id=track_id, frame_id=1,
                       crop_bgr=np.zeros((20, 30, 3), np.uint8), crop_bbox_warp_px=(0, 0, 30, 20), board_uv=None,
                       orientation_deg=None, observed_at_ms=0, reason="new_track")
 
-
-def test_spec_lifecycle_alias_exists_for_lane_c():
-    assert PhysicalLifecycle is Lifecycle
-
-
-def test_port_passes_model_results_through_with_request_id():
-    fake = FakeDev2Classifier(lambda t: ClassificationResult(t, PieceClass.BRIDGE, "perceptron", 0.93, True, latency_ms=400))
-    port = PerceptronClassifierPort(fake)
-    port.submit(_roi())
-    out = port.poll()
-    assert len(out) == 1 and out[0].piece_class is PieceClass.BRIDGE and out[0].confidence == 0.93
-    assert out[0].request_id == "r1" and out[0].class_source == "perceptron"
-    assert port.poll() == []
-    port.close()
-    assert fake.shut
-
-
-def test_port_withholds_confidence_from_colour_fallback_so_it_cannot_be_high():
-    fake = FakeDev2Classifier(lambda t: ClassificationResult(t, PieceClass.HOSPITAL, "color_fallback", 0.85, True,
-                                                              evidence="Color-based: PINK = hospital"))
-    port = PerceptronClassifierPort(fake)
-    port.submit(_roi())
-    res = port.poll()[0]
-    assert res.piece_class is PieceClass.HOSPITAL and res.class_source == "color_fallback"
-    assert res.confidence is None and port.downgraded_fallback == 1
-    assert port.status()["available"] is False and "hint" in port.status()["note"]
-    # through the tracker + scorer this stays REVIEW: a colour rule is not recognition confidence
-    tr = PieceTracker(TRACKER_CFG)
-    run(tr, [[cand(100, 100)]] * 3)
-    tr.mark_classification_requested("t1", "r1")
-    assert tr.apply_classification(res, 1)
-    assert tr.tracks["t1"].classification.piece_class is PieceClass.HOSPITAL
-    assert tr.tracks["t1"].classification.confidence is None
-
-
-def test_port_unknown_class_keeps_tracker_asking():
-    fake = FakeDev2Classifier(lambda t: ClassificationResult(t, None, "perceptron", None, True, evidence="no detections"))
-    port = PerceptronClassifierPort(fake)
-    port.submit(_roi())
-    res = port.poll()[0]
-    tr = PieceTracker(TRACKER_CFG)
-    run(tr, [[cand(100, 100)]] * 3)
-    tr.mark_classification_requested("t1", "r1")
-    tr.apply_classification(res, 1)
-    t = tr.tracks["t1"]
-    assert t.needs_classification and t.classification_reason == "retry_unknown_class"
-    assert t.classification.piece_class is None
-
-
-def test_service_with_dev2_port_reaches_high_only_for_model_results(tmp_path):
-    board = SyntheticBoard()
-    reg = make_registration(tmp_path)
-    cam = lambda img: render_camera(img, camera_homography(board.geometry))  # noqa: E731
-    cfg = fast_config(tmp_path, reg)
-    fake = FakeDev2Classifier(lambda t: ClassificationResult(t, PieceClass.BRIDGE, "perceptron", 0.9, True))
-    svc = PerceptionService(cfg, classifier=PerceptronClassifierPort(fake), sinks=[])
-    obs, t = feed(svc, [cam(board.empty)] * 5)
-    obs, t = feed(svc, [cam(board.with_pieces([BRIDGE]))] * 10, start_frame=6, t0=t)
-    placed = by_lifecycle(obs, Lifecycle.PLACED)
-    assert placed[-1].confidence_band is ConfidenceBand.HIGH and placed[-1].class_source == "perceptron"
-    assert svc.status()["perceptron"] == "degraded"  # fake adapter reports unavailable
-    svc.stop()
 
 
 def test_observe_url_guard_refuses_the_legacy_gateway_endpoint():
@@ -188,28 +108,6 @@ def test_droidcam_helpers():
 
 
 # ---------------------------------------------------------------- lag / accuracy ideas
-def test_port_bounds_inflight_requests_and_reports_latency():
-    held = []
-
-    class SlowDev2:
-        _adapter = type("A", (), {"is_available": True, "get_telemetry": lambda self: {}})()
-
-        def classify_async(self, track_id, roi_image, callback=None):
-            held.append((track_id, callback))  # answer later
-
-    port = PerceptronClassifierPort(SlowDev2(), max_inflight=2)
-    port.submit(_roi("t1", "r1")); port.submit(_roi("t2", "r2"))
-    assert not port.can_accept()
-    port.submit(_roi("t3", "r3"))
-    deferred = port.poll()
-    assert len(deferred) == 1 and deferred[0].track_id == "t3" and not deferred[0].valid and deferred[0].class_source == "deferred"
-    for tid, cb in held:
-        cb(tid, ClassificationResult(tid, PieceClass.BRIDGE, "perceptron", 0.9, True))
-    results = port.poll()
-    assert sorted(r.track_id for r in results) == ["t1", "t2"] and port.can_accept()
-    st = port.status()
-    assert st["deferred_busy"] == 1 and st["latency_ms_p50"] is not None and st["inflight"] == 0
-
 
 def test_prepare_roi_rotates_long_axis_horizontal_and_downscales():
     from perception.candidate_regions import prepare_roi
@@ -264,3 +162,71 @@ def test_fast_preset_sets_the_weak_laptop_knobs():
     cfg = config_from_args(build_parser().parse_args(["--fast"]))
     assert cfg.board.warp_px_per_mm == 1.0 and cfg.board.redetect_every_n_frames == 2
     assert cfg.service.show_warp is False and cfg.service.roi_max_px == 256
+
+
+# ---------------------------------------------------------------- the single classifier port (perception.fusion)
+class _SyncDev2:
+    """Mimics PieceClassifier.classify_sync / get_telemetry / shutdown with scripted answers."""
+
+    def __init__(self, answer):
+        self.answer = answer
+        self.calls = 0
+        self.shut = False
+
+    def classify_sync(self, track_id, crop):
+        self.calls += 1
+        return self.answer(track_id)
+
+    def get_telemetry(self):
+        return {"perceptron": {"is_available": True}}
+
+    def shutdown(self):
+        self.shut = True
+
+
+def _drain(port, n, timeout_s=3.0):
+    out = []
+    deadline = time.time() + timeout_s
+    while len(out) < n and time.time() < deadline:
+        out.extend(port.poll())
+        time.sleep(0.01)
+    return out
+
+
+def test_port_needs_three_agreeing_frames_before_a_result_is_valid():
+    port = PerceptronClassifierPort(_SyncDev2(lambda t: ClassificationResult(t, PieceClass.BRIDGE, "perceptron", None, True)))
+    try:
+        for i in range(3):
+            r = _roi("t1", f"r{i}")
+            r.frame_id = 10 + i
+            port.submit(r)
+        results = _drain(port, 3)
+        assert [r.valid for r in results] == [False, False, True]
+        assert results[-1].agreement_frames == 3 and results[-1].piece_class is PieceClass.BRIDGE
+        assert results[-1].request_id == "r2"
+        st = port.status()
+        assert st["consensus_required"] == 3 and st["latency_ms_p50"] is not None and st["available"]
+    finally:
+        port.close()
+
+
+def test_port_never_accepts_colour_fallback_classes():
+    port = PerceptronClassifierPort(_SyncDev2(lambda t: ClassificationResult(t, PieceClass.HOSPITAL, "color_fallback", 0.85, True)))
+    try:
+        for i in range(4):
+            r = _roi("t1", f"r{i}"); r.frame_id = i
+            port.submit(r)
+        results = _drain(port, 4)
+        assert results and all(not r.valid for r in results)
+        tr = PieceTracker(TRACKER_CFG)
+        run(tr, [[cand(100, 100)]] * 3)
+        tr.mark_classification_requested("t1", results[-1].request_id)
+        tr.apply_classification(results[-1], 1)
+        assert tr.tracks["t1"].classification.piece_class is None and tr.tracks["t1"].needs_classification
+    finally:
+        port.close()
+
+
+def test_old_classifier_port_module_is_an_alias():
+    import perception.classifier_port as alias
+    assert alias.PerceptronClassifierPort is PerceptronClassifierPort
