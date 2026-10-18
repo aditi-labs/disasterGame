@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ProjectorRoute } from "../src/routes/projector/ProjectorRoute";
 import { BoardSvg } from "../src/game/overlays/BoardSvg";
 import { fixture } from "./fixtures";
+import { IDLE_VIEW } from "../src/game/clock";
 
 vi.mock("../src/live/useLiveWorld", () => ({ useLiveWorld: () => world }));
 const world = { scenario: fixture.scenario, snapshot: fixture.states.connected, observations: new Map(), reactions: [], status: "live", clearPending: vi.fn() };
@@ -11,6 +12,7 @@ let receive: (event: any) => void;
 let messages: any[];
 let location: { search: string };
 beforeEach(() => {
+  world.snapshot = fixture.states.connected;
   vi.useFakeTimers(); location = { search: "" }; messages = [];
   vi.stubGlobal("window", { location, innerWidth: 1920, innerHeight: 1080, setInterval, clearInterval, setTimeout, clearTimeout, addEventListener: vi.fn(), removeEventListener: vi.fn() });
   vi.stubGlobal("localStorage", { getItem: () => null, setItem: vi.fn() });
@@ -34,4 +36,16 @@ it("keeps the authoritative screen rehearsal available", () => {
   act(() => { renderer = create(<ProjectorRoute />); });
   expect(renderer.root.findByType(BoardSvg).props.hold).toBeNull();
   expect(renderer.root.findByType(BoardSvg).props.snapshot).toBe(fixture.states.connected);
+});
+it("uses the operator's captured backend snapshot for stable results after 70 seconds", () => {
+  location.search = "?mode=screen";
+  act(() => { renderer = create(<ProjectorRoute />); });
+  act(() => receive({ data: { t: "clock", view: { ...IDLE_VIEW, sessionId: "run-final", phase: "RESULTS", mode: "finished", elapsedMs: 75000 }, syncing: false, finalSnapshot: fixture.states.connected } }));
+  world.snapshot = fixture.states.services;
+  act(() => { vi.advanceTimersByTime(250); });
+  const board = renderer.root.findByType(BoardSvg);
+  expect(board.props.snapshot).toBe(fixture.states.connected);
+  expect(board.props.resultsSyncing).toBe(false);
+  expect(board.props.pending).toEqual([]);
+  expect(board.props.reactions).toEqual([]);
 });

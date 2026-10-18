@@ -13,6 +13,7 @@ import { isMuted, setMuted } from "../../game/sound";
 import { BEATS, CONNECTION_LOST, FLOOD_UPDATE_UNAVAILABLE, GAME_PIECES, LIVE_DATA_UNAVAILABLE, PIECE_NAME } from "../../game/story";
 import { buildBoardModel, peopleReachable, SERVICES, totalNeed, totalPeople, unmetNeed } from "../../game/worldAdapter";
 import { useMission, type Mission } from "./useMission";
+import { StartScreen } from "./StartScreen";
 
 // /operator — the laptop view (spec §9 "Operator UI"). Every control maps to one
 // authoritative backend action; numbers are read from the latest snapshot only.
@@ -54,17 +55,22 @@ export function OperatorRoute() {
   const liveData = !!scenario && !!snapshot && !scenarioMismatch && !healthError;
   const connected = status === "live";
   const busy = mission.starting || world.inFlight > 0;
+  const [tools, setTools] = useState(() => new URLSearchParams(window.location.search).get("tools") === "1");
+  const resultSnapshot = mission.finalSnapshot ?? snapshot;
 
   const model = useMemo(
     () => (scenario && snapshot ? buildBoardModel(scenario, snapshot, inMission ? beat.pieces : [], inputOpen) : null),
     [scenario, snapshot, beat.pieces, inputOpen, inMission],
   );
-  const results = useMemo(() => (scenario && snapshot ? buildResults(scenario, snapshot) : null), [scenario, snapshot]);
+  const results = useMemo(() => (scenario && resultSnapshot ? buildResults(scenario, resultSnapshot) : null), [scenario, resultSnapshot]);
 
   // Keys 3–6 only in diagnostic/manual mode (spec: never active player instructions).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!debug || (e.target as HTMLElement)?.tagName === "INPUT" || (e.target as HTMLElement)?.tagName === "SELECT") return;
+      const target = e.target as HTMLElement;
+      if (["INPUT", "SELECT", "TEXTAREA"].includes(target?.tagName) || target?.isContentEditable || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+      if (e.key.toLowerCase() === "o") return setTools(v => !v);
+      if (!debug) return;
       if (KEY_PIECES[e.key]) setPiece(KEY_PIECES[e.key]);
     };
     window.addEventListener("keydown", onKey);
@@ -102,13 +108,13 @@ export function OperatorRoute() {
       session_id: clock.sessionId,
       started_at: mission.startedAt,
       exported_at: new Date().toISOString(),
-      final_world_version: snapshot?.world_version ?? null,
+      final_world_version: resultSnapshot?.world_version ?? null,
       final_phase: phase,
       surge: clock.surge,
       marker_registration: { verified: MARKERS_VERIFIED, layout_verified_from_photo: MARKER_LAYOUT_VERIFIED, print_world_alignment_verified: PRINT_WORLD_ALIGNMENT_VERIFIED, provenance: MARKER_PROVENANCE },
       events: world.run,
-      final_game: snapshot?.game ?? null,
-      final_metrics: snapshot?.metrics ?? null,
+      final_game: resultSnapshot?.game ?? null,
+      final_metrics: resultSnapshot?.metrics ?? null,
     };
     const blob = new Blob([JSON.stringify(record, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
@@ -118,12 +124,17 @@ export function OperatorRoute() {
     URL.revokeObjectURL(a.href);
   };
 
+  if (!tools) {
+    return <StartScreen mode={clock.mode} phase={phase} remainingMs={view.remainingMs} ready={liveData && connected} starting={busy} physicalInputReady={telemetry.camera.tone === "ok" && telemetry.registrationReady && telemetry.perceptron.tone === "ok" && PRINT_WORLD_ALIGNMENT_VERIFIED} error={mission.startError ?? (!liveData ? scenarioError ?? healthError ?? null : null)} onStart={() => void mission.startGame()} />;
+  }
+
   return (
     <div className="operator">
       <header className="op-header">
         <div className="op-brand">
           <b>FLOODSHIFT</b> <span>operator</span>
         </div>
+        <button className="btn btn-sm btn-quiet" onClick={() => setTools(false)}>CLOSE TOOLS · O</button>
         <div className="status-line">
           <Status label="DB/SCENARIO" value={scenario ? `${scenario.scenario_id}${fingerprint ? " · " + fingerprint.slice(0, 8) : ""}` : "UNAVAILABLE"} tone={scenario && !scenarioMismatch ? "ok" : "bad"} title={fingerprint ? `sha256 of GET /scenario: ${fingerprint}` : scenarioError ?? undefined} />
           <Status label="WORLD/WS" value={`${status.toUpperCase()}${snapshot ? ` · v${snapshot.world_version}` : ""}`} tone={connected ? "ok" : status === "connecting" ? "warn" : "bad"} />

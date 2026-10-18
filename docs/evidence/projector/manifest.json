@@ -1,0 +1,76 @@
+{
+  "generated_at": "2026-10-18T12:34:12.133Z",
+  "scenario_id": "nepal_rasuwa_hot_v1",
+  "source": "Real retained WorldService reducer; backend-generated test snapshots",
+  "renderer": "React SVG + resvg; not browser screenshots or physical evidence",
+  "outputs": [
+    {
+      "name": "idle",
+      "world_version": 0,
+      "phase": "IDLE",
+      "metrics": {
+        "blocked_roads": 0,
+        "resource_spent": 0,
+        "unmet_medical_model": 0,
+        "people_reachable_for_medical": 0,
+        "unmet_food_model": 0,
+        "people_reachable_for_food": 0,
+        "unmet_refuge_model": 0,
+        "people_reachable_for_shelter": 0,
+        "reachable_communities": 0,
+        "road_access_fraction": 1
+      }
+    },
+    {
+      "name": "crossing-before",
+      "world_version": 6,
+      "phase": "CROSSING",
+      "metrics": {
+        "blocked_roads": 3,
+        "resource_spent": 3,
+        "unmet_medical_model": 2,
+        "people_reachable_for_medical": 8,
+        "unmet_food_model": 8,
+        "people_reachable_for_food": 8,
+        "unmet_refuge_model": 8,
+        "people_reachable_for_shelter": 8,
+        "reachable_communities": 1,
+        "road_access_fraction": 0.8333333333333334
+      }
+    },
+    {
+      "name": "crossing-after",
+      "world_version": 7,
+      "phase": "CROSSING",
+      "metrics": {
+        "blocked_roads": 2,
+        "resource_spent": 5,
+        "unmet_medical_model": 1,
+        "people_reachable_for_medical": 16,
+        "unmet_food_model": 6,
+        "people_reachable_for_food": 16,
+        "unmet_refuge_model": 6,
+        "people_reachable_for_shelter": 16,
+        "reachable_communities": 2,
+        "road_access_fraction": 0.8888888888888888
+      }
+    },
+    {
+      "name": "results",
+      "world_version": 7,
+      "phase": "RESULTS",
+      "metrics": {
+        "blocked_roads": 2,
+        "resource_spent": 5,
+        "unmet_medical_model": 1,
+        "people_reachable_for_medical": 16,
+        "unmet_food_model": 6,
+        "people_reachable_for_food": 16,
+        "unmet_refuge_model": 6,
+        "people_reachable_for_shelter": 16,
+        "reachable_communities": 2,
+        "road_access_fraction": 0.8888888888888888
+      }
+    }
+  ]
+}

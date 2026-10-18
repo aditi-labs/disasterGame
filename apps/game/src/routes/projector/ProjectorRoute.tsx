@@ -8,6 +8,7 @@ import { buildResults } from "../../game/results";
 import { BEATS, LIVE_DATA_UNAVAILABLE } from "../../game/story";
 import { buildBoardModel } from "../../game/worldAdapter";
 import { BOARD_REGISTRATION_REQUIRED, PRINT_WORLD_ALIGNMENT_VERIFIED } from "../../game/board";
+import type { WorldSnapshot } from "../../types/contracts";
 
 // /projector — fullscreen projection over the printed board. No diagnostics, no code
 // labels, no sound. Retained keys (floodshift- ProjectionView):
@@ -45,6 +46,7 @@ export function ProjectorRoute() {
   const [cal, setCal] = useState<Calibration>(loadCal);
   const [clock, setClock] = useState<{ view: ClockView; sentAt: number }>({ view: IDLE_VIEW, sentAt: performance.now() });
   const [syncing, setSyncing] = useState(false);
+  const [finalSnapshot, setFinalSnapshot] = useState<WorldSnapshot | null>(null);
   const [rejections, setRejections] = useState<RejectionCue[]>([]);
   const [, setTick] = useState(0);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -60,6 +62,7 @@ export function ProjectorRoute() {
         case "clock":
           setClock({ view: m.view, sentAt: performance.now() });
           setSyncing(m.syncing);
+          setFinalSnapshot(m.finalSnapshot ?? null);
           break;
         case "reject":
           setRejections((list) => [...list.filter((r) => r.until > Date.now()), m.cue]);
@@ -157,8 +160,9 @@ export function ProjectorRoute() {
     return () => window.removeEventListener("keydown", onKey);
   }, [calibrating, corner]);
 
-  const { snapshot, scenario, scenarioError, scenarioMismatch, reactions, observations } = world;
+  const { scenario, scenarioError, scenarioMismatch, reactions, observations } = world;
   const view = extrapolateClock(clock.view, clock.sentAt, performance.now());
+  const snapshot = view.phase === "RESULTS" && finalSnapshot ? finalSnapshot : world.snapshot;
   const clockStale = view.sessionId != null && performance.now() - clock.sentAt > CLOCK_STALE_MS;
   const open = !clockStale && world.status === "live" && (view.mode === "running" || view.mode === "paused") && view.elapsedMs < FREEZE_AT_MS;
   const model = useMemo(
@@ -180,13 +184,13 @@ export function ProjectorRoute() {
             snapshot={snapshot}
             model={model}
             clock={view}
-            reactions={reactions}
-            rejections={rejections}
-            pending={pending}
+            reactions={view.phase === "RESULTS" ? [] : reactions}
+            rejections={view.phase === "RESULTS" ? [] : rejections}
+            pending={view.phase === "RESULTS" ? [] : pending}
             surface={overlay ? "overlay" : "screen"}
             variant="projector"
             results={results}
-            resultsSyncing={syncing || world.status !== "live" || clockStale}
+            resultsSyncing={syncing || (view.phase === "RESULTS" && !finalSnapshot) || world.status !== "live" || clockStale}
             connectionLost={world.status !== "live" || clockStale}
             hold={hold}
             testPattern={!registrationBlocked && (testing || calibrating)}

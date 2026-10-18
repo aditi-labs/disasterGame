@@ -12,7 +12,7 @@ import type { Results } from "../results";
 import { BEATS, FLOOD_UPDATE_UNAVAILABLE, PIECE_NAME, SUBTITLE, TITLE } from "../story";
 import type { BoardModel, PopulationMark } from "../worldAdapter";
 import { FloodLayer } from "./FloodLayer";
-import { PIECE_COLOR, PieceGlyph, PopulationCluster } from "./glyphs";
+import { MatsyaMark, PIECE_COLOR, PieceGlyph, PopulationCluster } from "./glyphs";
 
 // The projected board, used full-size on /projector and as the operator's mini map.
 // Layers draw only the BoardModel (authoritative snapshot) plus short-lived cues.
@@ -51,11 +51,6 @@ function polylineLength(path: UV[]): number {
   return n;
 }
 
-function fmtClock(ms: number): string {
-  const s = Math.max(0, Math.ceil(ms / 1000));
-  return `0:${String(s).padStart(2, "0")}`;
-}
-
 export function BoardSvg(props: BoardSvgProps) {
   const { scenario, snapshot, model, clock, reactions, rejections, pending, surface, variant, results, hold, testPattern, onSiteClick, highlightSite } = props;
   const roads = useMemo(() => new Map(scenario.roads.map((r) => [r.id, r])), [scenario]);
@@ -69,7 +64,7 @@ export function BoardSvg(props: BoardSvgProps) {
   const H = BOARD_HEIGHT;
 
   return (
-    <svg className={`board board-${surface} board-${variant}`} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" role={onSiteClick ? "group" : "img"} aria-label="FLOODSHIFT projected board">
+    <svg className={`board board-${surface} board-${variant}`} data-projector-design="map-overlay-v2" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" role={onSiteClick ? "group" : "img"} aria-label="FLOODSHIFT projected board">
       <defs>
         <pattern id="hatch-danger" width={7} height={7} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
           <line x1={0} y1={0} x2={0} y2={7} stroke={PALETTE.dangerHatch} strokeWidth={1.2} opacity={0.75} />
@@ -247,11 +242,11 @@ export function BoardSvg(props: BoardSvgProps) {
         </g>
       )}
 
-      {/* 12 · Compact edge HUD: mission line top centre, timer top edge; never in marker keep-outs. */}
+      {/* 12 · Compact edge narrative, with marker keep-outs applied last. */}
       {!compact && <Hud phase={phase} clock={clock} headline={latest?.headline ?? null} headlineKey={latest?.key ?? ""} />}
 
       {/* 13 · Results: map dims, real snapshot fields only. */}
-      {phase === "RESULTS" && results && !compact && <ResultsCard results={results} syncing={props.resultsSyncing} />}
+      {phase === "RESULTS" && results && !compact && <ResultsOverlay results={results} syncing={props.resultsSyncing} />}
       {props.connectionLost && !hold && !compact && (
         <text x={W / 2} y={H - 60} className="hold-text">CONNECTION LOST · LAST CONFIRMED STATE</text>
       )}
@@ -260,15 +255,17 @@ export function BoardSvg(props: BoardSvgProps) {
       {hold && (
         <g className="layer-hold">
           <rect width={W} height={H} fill="#000" opacity={surface === "overlay" ? 1 : 0.86} />
-          <text x={W / 2} y={H / 2 - 18} className="title">
+          <g transform={"translate(" + W / 2 + " " + (H / 2 - 150) + ")"} color={PALETTE.cream}><MatsyaMark size={62} /></g>
+          <text x={W / 2} y={H / 2 - 60} className="hold-brand">
             {TITLE}
           </text>
-          <text x={W / 2} y={H / 2 + 14} className="subtitle">
+          <text x={W / 2} y={H / 2} className="hold-heading">
             {SUBTITLE}
           </text>
           <text x={W / 2} y={H / 2 + 56} className="hold-text">
             {hold}
           </text>
+          <text x={W / 2} y={H / 2 + 90} className="hold-hint">Press M for the screen experience</text>
         </g>
       )}
 
@@ -276,7 +273,7 @@ export function BoardSvg(props: BoardSvgProps) {
       {testPattern && <TestPattern />}
 
       {/* 16 · ArUco keep-outs. Overlay: solid black (no projected light on markers). */}
-      <g className="layer-markers" pointerEvents="none">
+      {(surface === "overlay" || compact) && <g className="layer-markers" pointerEvents="none">
         {BOARD_MARKERS.map((m) => {
           const c = S(m.center);
           const h = MARKER_KEEPOUT_HALF_UV * W;
@@ -291,7 +288,7 @@ export function BoardSvg(props: BoardSvgProps) {
             </g>
           );
         })}
-      </g>
+      </g>}
 
       {/* Operator click-to-pad diagnostics: the same live action the camera would cause. */}
       {onSiteClick && (
@@ -441,13 +438,15 @@ function Hud({ phase, clock, headline, headlineKey }: { phase: BoardSvgProps["cl
   if (phase === "IDLE") {
     return (
       <g className="hud" pointerEvents="none">
-        <text x={W / 2} y={90} className="title">
+        <g transform={`translate(${W / 2} ${BOARD_HEIGHT * 0.16})`} color={PALETTE.cream}><MatsyaMark size={66} /></g>
+        <text x={W / 2} y={BOARD_HEIGHT * 0.25} className="idle-brand">
           {TITLE}
         </text>
-        <text x={W / 2} y={120} className="subtitle">
+        <text x={W / 2} y={BOARD_HEIGHT * 0.31} className="idle-heading">
           {SUBTITLE}
         </text>
-        <text x={W / 2} y={150} className="hud-line">
+        <path d={`M${W / 2 - 54} ${BOARD_HEIGHT * 0.34} H${W / 2 + 54}`} stroke={PALETTE.waterHatch} strokeWidth={1} opacity={0.5} />
+        <text x={W / 2} y={BOARD_HEIGHT * 0.38} className="idle-ready">
           {beat.line}
         </text>
       </g>
@@ -464,36 +463,27 @@ function Hud({ phase, clock, headline, headlineKey }: { phase: BoardSvgProps["cl
       </g>
     );
   }
-  const running = clock.mode === "running" || clock.mode === "paused";
+  if (phase === "RESULTS") return null;
   return (
     <g className="hud" pointerEvents="none">
-      <text key={`h-${phase}`} x={W / 2} y={44} className={`mission ${phase === "WARNING" ? "warning" : ""}`}>
+      <text key={`h-${phase}`} x={W / 2} y={34} className={`projection-beat ${phase === "WARNING" ? "warning" : ""}`}>
         {beat.headline}
       </text>
-      <text key={`l-${phase}`} x={W / 2} y={70} className="hud-line">
+      <text key={`l-${phase}`} x={W / 2} y={62} className="projection-prompt">
         {beat.line}
       </text>
-      {headline ? (
-        <text key={headlineKey} x={W / 2} y={98} className={`cue-headline tone-${headline.tone}`}>
+      {phase === "WARNING" && <text x={W / 2} y={90} className="objective">RESTORE THE CROSSING</text>}
+      {headline && (
+        <text key={headlineKey} x={W / 2} y={BOARD_HEIGHT - 48} className={`cue-headline tone-${headline.tone}`}>
           {headline.text}
         </text>
-      ) : beat.objective ? (
-        <text x={W / 2} y={98} className="objective">
-          {beat.objective}
-        </text>
-      ) : null}
+      )}
       {phase === "SURGE" && clock.surge === "failed" && (
-        <text x={W / 2} y={122} className="hud-note">
+        <text x={W / 2} y={90} className="hud-note">
           {FLOOD_UPDATE_UNAVAILABLE}
         </text>
       )}
-      {running && (
-        <text x={880} y={44} className={`timer ${clock.mode === "paused" ? "paused" : ""}`}>
-          {clock.mode === "paused" ? "PAUSED" : fmtClock(clock.remainingMs)}
-        </text>
-      )}
-      {/* Matsya motif: a fish-tail current at each act transition, in the bottom margin. */}
-      <FishCurrent key={`fish-${phase}`} y={BOARD_HEIGHT - 26} />
+      <g transform={`translate(${W / 2} ${BOARD_HEIGHT - 20})`} color={PALETTE.waterHatch} opacity={0.45}><MatsyaMark size={24} /></g>
     </g>
   );
 }
@@ -510,28 +500,29 @@ function FishCurrent({ y }: { y: number }) {
   );
 }
 
-function ResultsCard({ results, syncing }: { results: Results; syncing?: boolean }) {
+function ResultsOverlay({ results, syncing }: { results: Results; syncing?: boolean }) {
   const W = BOARD_WIDTH;
   const H = BOARD_HEIGHT;
   const rows = results.rows;
   const cardW = 600;
-  const cardH = 150 + rows.length * 34 + (results.score ? 30 : 0);
+  const cardH = 190 + rows.length * 42 + (results.score ? 30 : 0);
   const x = (W - cardW) / 2;
   const y = Math.max(140, (H - cardH) / 2);
   return (
     <g className="results" pointerEvents="none">
-      <rect width={W} height={H} fill="#000" opacity={0.42} />
-      <rect x={x} y={y} width={cardW} height={cardH} rx={6} className="results-card" />
+      <rect width={W} height={H} fill="#000" opacity={0.7} />
+      <text x={W / 2} y={y + 12} className="projection-beat">THE FLOOD SETTLES</text>
       <text x={W / 2} y={y + 44} className="results-head">
         {syncing ? "SYNCING RESULTS" : results.headline}
       </text>
+      <text x={W / 2} y={y + 76} className="projection-prompt">Your actions shaped the outcome.</text>
       {results.empty ? (
-        <text x={W / 2} y={y + 84} className="hud-line">
+        <text x={W / 2} y={y + 120} className="hud-line">
           No mission state to report.
         </text>
       ) : (
         rows.map((r, i) => (
-          <g key={r.id} transform={`translate(${x + 34} ${y + 92 + i * 34})`}>
+          <g key={r.id} transform={`translate(${x + 34} ${y + 120 + i * 42})`}>
             <text className="results-label">{r.label}</text>
             <text x={cardW - 68} className={`results-value tone-${r.tone ?? "info"}`}>
               {r.value}

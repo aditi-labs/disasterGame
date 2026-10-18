@@ -43,7 +43,9 @@ try {
     $taskScenario = Invoke-RestMethod "$env:VITE_API_URL/scenario" -TimeoutSec 5
     if ($taskScenario.scenario_id -ne $env:VITE_SCENARIO_ID) { throw 'Backend/UI scenario mismatch.' }
     Write-Host "Operator:  http://localhost:$FrontendPort/operator"
+    Write-Host 'Press O on the operator page to show technical controls without restarting the clock.'
     Write-Host "Projector: http://localhost:$FrontendPort/projector (second window of the same browser)"
+    Write-Host "Screen rehearsal: http://localhost:$FrontendPort/projector?mode=screen"
     Write-Host 'Ctrl+C stops the UI and the backend started by this script.'
     Push-Location $taskGame
     try { & node $taskVite --host 127.0.0.1 --port $FrontendPort --strictPort }

@@ -85,4 +85,30 @@ describe("operator mission controller", () => {
     expect(world.remove).not.toHaveBeenCalled();
     expect(mission.inputOpen).toBe(false);
   });
+  it("starts the next run with the same START control after results", async () => {
+    await act(async () => { await mission.startGame(); });
+    const previous = mission.clock.sessionId;
+    act(() => mission.end());
+    expect(mission.clock.mode).toBe("finished");
+    await act(async () => { await mission.startGame(); });
+    expect(mission.clock.mode).toBe("running");
+    expect(mission.clock.sessionId).not.toBe(previous);
+    expect(world.reset).toHaveBeenCalledTimes(2);
+  });
+  it("waits for an acknowledged snapshot, then preserves and broadcasts the final state", async () => {
+    await act(async () => { await mission.startGame(); });
+    world.knownVersion = () => fixture.states.connected.world_version;
+    act(() => { vi.advanceTimersByTime(70000); });
+    expect(mission.finalSnapshot).toBeNull();
+    expect(mission.resultsSyncing).toBe(true);
+    world.snapshot = fixture.states.connected;
+    act(() => { vi.advanceTimersByTime(100); });
+    expect(mission.finalSnapshot).toBe(fixture.states.connected);
+    expect(messages.filter(m => m.t === "clock").at(-1).finalSnapshot).toBe(fixture.states.connected);
+    world.snapshot = fixture.states.services;
+    act(() => { vi.advanceTimersByTime(100); });
+    expect(mission.finalSnapshot).toBe(fixture.states.connected);
+    await act(async () => { await mission.resetGame(); });
+    expect(mission.finalSnapshot).toBeNull();
+  });
 });

@@ -1,6 +1,6 @@
 # Operator run of show
 
-Start with the [README](../README.md) launcher. Use a second window of the **same browser profile and origin** for `/projector`; the laptop and a different browser/device do not share the clock channel. The operator link reuses the named projector window.
+Start with the [README](../README.md) launcher. Use a second window of the **same browser profile and origin** for `/projector`; the laptop and a different browser/device do not share the clock channel. `/operator` normally has one START button. Press **O** to reveal or close technical controls in place; this preserves the running clock. `/operator?tools=1` opens the technical view on initial load. Keep exactly one operator window open, and do not reload it during a run.
 
 For screen rehearsal, LOAD LIVE SCENARIO and check world/WS is live with the expected scenario ID. Open `/projector?mode=screen` in the same browser, or press `M` on the projector to show the source map. Physical overlay currently shows BOARD REGISTRATION REQUIRED because Lane B's landscape print differs from the square world extent; no measured print-to-world transform is available. Do not use pixel keystone or stretching to conceal that mismatch. After shared integration provides the mapping, confirm the print and measured marker registration using [BOARD_REGISTRATION](BOARD_REGISTRATION.md), then test/calibrate against hardware. Camera/ArUco/Perceptron statuses come from the perception service; a healthy world does not imply working detection. CALIBRATE CAMERA opens reported status; lane B starts calibration externally.
 
@@ -8,7 +8,7 @@ Place the four real pieces in a tray outside the active board area. No physical 
 
 The current data has only one flooded stage. Tell the presenter before rehearsal: START activates it; the scheduled 50-second advance will report FLOOD UPDATE UNAVAILABLE. The data owner must supply a reviewed second stage for the intended surge demo. The incoming photo verifies marker IDs/layout/rotation (bottom-right 13, bottom-left 12); centre/size measurements, the print-to-world transform and projector alignment remain hardware gates.
 
-Optional PLAY INTRO CARD is outside the game clock. START GAME resets the authoritative world, places digital START and the two existing population inputs, then starts 75 seconds. A rejected setup action keeps the clock idle. If setup fails, inspect the reason, reset, and retry.
+START leads directly into gameplay; the seven-frame artwork prologue is omitted at the user's request. START (or START GAME in technical controls) resets the authoritative world, places digital START and the two existing population inputs, then starts 75 seconds. A rejected setup action keeps the clock idle. If setup fails, inspect the reason, reset, and retry. The legacy optional transition card remains available in technical controls, outside the game clock.
 
 | Mission time | Operator/player action | Expected truthful output |
 | --- | --- | --- |
@@ -16,8 +16,8 @@ Optional PLAY INTRO CARD is outside the game clock. START GAME resets the author
 | 10–30 s | Place bridge on a lit crossing; manual fallback can select/click a real pad | Accepted token halo; only real reachability/route changes glow mint. East crossing restores access in this scenario; other crossings can be accepted without improving access |
 | 30–50 s | Place shelter or hospital; food optional | Actual facility capacity and returned service paths; unmet needs may remain after placement |
 | 50–70 s | Respond with remaining pieces or move/remove | Exactly one timed advance request. Current bundle rejects `last_stage`; map remains at the accepted stage and reports unavailable |
-| 70–75 s | Stop moving pieces | UI input closes. Results use confirmed metrics and show syncing while acknowledgments/snapshots are outstanding |
-| 75 s onward | Discuss outcome; DOWNLOAD RUN RECORD | Clock finishes; results remain. REPLAY authoritatively resets to ready |
+| 70–75 s | Stop moving pieces | UI input closes. Results wait for outstanding UI acknowledgments/snapshots, then capture one confirmed state for both windows |
+| 75 s onward | Discuss outcome; DOWNLOAD RUN RECORD | Clock finishes; results remain. START begins another run, or technical REPLAY resets to ready |
 
 PAUSE banks elapsed mission time and suspends automatic events; manual world actions can still be accepted before the 70-second cutoff. RESUME requires a live world connection. RECALIBRATE while paused opens projector tools and camera status without resetting the world. Manual flood advance remains a real action and does not replace the one-time scheduled request.
 

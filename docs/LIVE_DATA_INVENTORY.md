@@ -16,6 +16,8 @@ Verified from this checkout on 2026-10-18. This inventory describes checked-in f
 | `backend/world/session_store.py` | Optional SQLite checkpoint store via `FLOODSHIFT_SESSION`. Default server uses memory with the real bundle; there is no required external database |
 | `perception/board_registration.json` | Incoming Lane B photo evidence: verified IDs/layout/rotation; estimated landscape print dimensions and marker centres, not measured world UV |
 | `perception/tests/fixtures/real_board_photo_2026-10-18_upright_1400.jpg` | Actual team board photo in its final landscape orientation. Photo facts supersede the earlier legacy marker guesses |
+| `perception/classifier.py`, `perceptron_adapter.py`, `fusion.py` | Dev 2's incoming `9a66c47`; classification implementation, not a verified connection to the camera service or world gateway. See integration-contract import/interface gaps |
+| `assets/piece_references/*.jpg` | Incoming actual bridge, hospital and food-station reference photographs. No shelter reference is checked in |
 
 The cartography is mapped source geography. Population, site suitability, flood closures, capacity, budget and outcomes are educational assumptions already in the source scenario, not measured demographic or operational flood predictions. The UI creates no replacement records. START places the existing population inputs at their scenario coordinates.
 

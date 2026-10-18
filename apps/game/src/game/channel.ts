@@ -1,9 +1,9 @@
-import type { UV } from "../types/contracts";
+import type { UV, WorldSnapshot } from "../types/contracts";
 import type { ClockView } from "./clock";
 
 // Operator <-> projector link. Both windows read world state straight from the backend
 // WebSocket; this channel carries only what the backend does not broadcast: the
-// mission clock, operator action rejections, projector commands and projector health.
+// mission clock, the final accepted snapshot, action rejections, commands and health.
 // BroadcastChannel is same-browser only: run /projector as a second window of the
 // operator laptop's browser (docs/RUN_OF_SHOW.md).
 
@@ -17,7 +17,7 @@ export interface RejectionCue {
 }
 
 export type ChannelMessage =
-  | { t: "clock"; view: ClockView; sentAt: number; syncing: boolean }
+  | { t: "clock"; view: ClockView; sentAt: number; syncing: boolean; finalSnapshot?: WorldSnapshot | null }
   | { t: "reject"; cue: RejectionCue }
   | { t: "command"; cmd: ProjectorCommand }
   | { t: "clear-pending"; tokenIds: string[] }

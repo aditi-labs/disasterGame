@@ -7,6 +7,7 @@ import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { BoardSvg } from "../../src/game/overlays/BoardSvg";
 import { PIECE_NAME } from "../../src/game/story";
 import { buildResults } from "../../src/game/results";
+import { StartScreen } from "../../src/routes/operator/StartScreen";
 
 // Real HTTP, real WebSockets, real BroadcastChannel, real reducer, real 75 seconds.
 // React test rendering verifies behavior/markup; it cannot verify browser pixels.
@@ -76,6 +77,7 @@ beforeAll(async () => {
   const events = new EventTarget();
   vi.stubGlobal("window", { setInterval, clearInterval, setTimeout, clearTimeout, innerWidth: 1920, innerHeight: 1080,
     location: { search: "?mode=screen" }, confirm: () => true,
+    dispatchEvent: events.dispatchEvent.bind(events),
     addEventListener: events.addEventListener.bind(events), removeEventListener: events.removeEventListener.bind(events) });
   const storage = () => { const data = new Map(); return { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => data.set(k, v) }; };
   vi.stubGlobal("localStorage", storage());
@@ -83,7 +85,7 @@ beforeAll(async () => {
   const { OperatorRoute } = await import("../../src/routes/operator/OperatorRoute");
   const { ProjectorRoute } = await import("../../src/routes/projector/ProjectorRoute");
   await act(async () => { operator = create(<OperatorRoute />); projector = create(<ProjectorRoute />); });
-  await until(() => operator.root.findAllByType(BoardSvg).length > 0 && projector.root.findAllByType(BoardSvg).length > 0 && !!board().snapshot && !!projected().snapshot);
+  await until(() => operator.root.findAllByType(StartScreen).length > 0 && projector.root.findAllByType(BoardSvg).length > 0 && !!projected().snapshot);
 });
 
 afterAll(async () => {
@@ -98,8 +100,12 @@ it("plays both UI screens for 75 real seconds, including correction, surge failu
     try { const m = JSON.parse(String(event.data)); if (m.type === "world.snapshot") actions.push({ at: new Date().toISOString(), version: m.payload.world_version, phase: m.payload.phase, stage: m.payload.simulation_stage }); } catch { /* pong */ }
   });
   try {
-    await until(() => operator.root.findAllByType("button").some(b => text(b) === "START GAME" && !b.props.disabled));
-    await click("START GAME");
+    await until(() => operator.root.findAllByType("button").some(b => text(b) === "START" && !b.props.disabled));
+    expect(operator.root.findAllByType("button")).toHaveLength(1);
+    await click("START");
+    const openTools = new Event("keydown");
+    Object.defineProperty(openTools, "key", { value: "o" });
+    act(() => window.dispatchEvent(openTools));
     await until(() => board().snapshot.population_demand.length === 2 && projected().clock.phase === "WARNING");
     capture("digital_start_with_both_population_records");
     await click("PAUSE");
@@ -161,7 +167,7 @@ it("plays both UI screens for 75 real seconds, including correction, surge failu
     const evidence = { kind: "floodshift.ui.live-test", verified_at: new Date().toISOString(), scenario_id: final.scenario_id,
       execution: "React test renderer + real HTTP/WebSocket/BroadcastChannel + real monotonic 75-second clock",
       browser_visual_check: "NOT RUN: no browser session available", physical_board_check: "NOT RUN",
-      assertions: ["both routes mounted", "digital START and two population records", "pause/resume", "manual bridge place/move/remove/retry", "duplicate placement rejected", "three facilities accepted", "exactly one timed surge rejected last_stage", "input closed at 70s", "finished at 75s", "backend-derived results", "replay clears world"],
+      assertions: ["both routes mounted", "START-only laptop view", "operator tools open without resetting the clock", "digital START and two population records", "pause/resume", "manual bridge place/move/remove/retry", "duplicate placement rejected", "three facilities accepted", "exactly one timed surge rejected last_stage", "input closed at 70s", "finished at 75s", "backend-derived results", "replay clears world"],
       frames, websocket_snapshots: actions, final_results: results };
     const folder = resolve(root, "docs/evidence");
     mkdirSync(folder, { recursive: true });

@@ -65,11 +65,15 @@ describe("board rendering with actual backend snapshots", () => {
     expect(render("IDLE")).not.toContain("flood-reveal");
     expect(render("CROSSING")).toContain("layer-population");
     expect(render("CROSSING")).not.toMatch(/NaN|undefined/);
+    expect(render("CROSSING")).not.toContain('class="timer');
+    expect(render("CROSSING", "screen")).not.toContain('class="layer-markers"');
   });
   it("keeps black marker masks after every projected layer and labels pending results", () => {
     const html = render("RESULTS");
     expect(html.indexOf("layer-markers")).toBeGreaterThan(html.indexOf('class="results"'));
     expect(html).toContain("RESPONSE COMPLETE");
+    expect(html).toContain("THE FLOOD SETTLES");
+    expect(html).not.toContain('class="results-card"');
     expect(render("RESULTS", "overlay", true)).toContain("SYNCING RESULTS");
     expect(html).not.toContain("EVERYONE SAVED");
   });

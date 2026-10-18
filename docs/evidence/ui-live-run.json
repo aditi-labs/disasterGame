@@ -1,12 +1,14 @@
 {
   "kind": "floodshift.ui.live-test",
-  "verified_at": "2026-10-18T11:51:24.395Z",
+  "verified_at": "2026-10-18T12:33:57.492Z",
   "scenario_id": "nepal_rasuwa_hot_v1",
   "execution": "React test renderer + real HTTP/WebSocket/BroadcastChannel + real monotonic 75-second clock",
   "browser_visual_check": "NOT RUN: no browser session available",
   "physical_board_check": "NOT RUN",
   "assertions": [
     "both routes mounted",
+    "START-only laptop view",
+    "operator tools open without resetting the clock",
     "digital START and two population records",
     "pause/resume",
     "manual bridge place/move/remove/retry",
@@ -21,12 +23,12 @@
   "frames": [
     {
       "label": "digital_start_with_both_population_records",
-      "at": "2026-10-18T11:50:08.710Z",
+      "at": "2026-10-18T12:32:41.819Z",
       "elapsed_ms": 0,
       "phase": "WARNING",
       "projector_phase": "WARNING",
       "world_version": 4,
-      "projector_world_version": 3,
+      "projector_world_version": 4,
       "simulation_stage": 1,
       "surge": "not_due",
       "syncing": false,
@@ -64,8 +66,8 @@
     },
     {
       "label": "crossing_10s",
-      "at": "2026-10-18T11:50:19.195Z",
-      "elapsed_ms": 10007.3285,
+      "at": "2026-10-18T12:32:52.332Z",
+      "elapsed_ms": 10054.131,
       "phase": "CROSSING",
       "projector_phase": "CROSSING",
       "world_version": 4,
@@ -107,8 +109,8 @@
     },
     {
       "label": "bridge_accepted",
-      "at": "2026-10-18T11:50:19.307Z",
-      "elapsed_ms": 10112.304,
+      "at": "2026-10-18T12:32:52.448Z",
+      "elapsed_ms": 10157.6587,
       "phase": "CROSSING",
       "projector_phase": "CROSSING",
       "world_version": 5,
@@ -155,8 +157,8 @@
     },
     {
       "label": "bridge_moved",
-      "at": "2026-10-18T11:50:19.428Z",
-      "elapsed_ms": 10321.1617,
+      "at": "2026-10-18T12:32:52.564Z",
+      "elapsed_ms": 10257.3903,
       "phase": "CROSSING",
       "projector_phase": "CROSSING",
       "world_version": 6,
@@ -203,8 +205,8 @@
     },
     {
       "label": "retry_after_move_and_remove_with_duplicate_rejected",
-      "at": "2026-10-18T11:50:19.677Z",
-      "elapsed_ms": 10537.8446,
+      "at": "2026-10-18T12:32:52.820Z",
+      "elapsed_ms": 10570.5547,
       "phase": "CROSSING",
       "projector_phase": "CROSSING",
       "world_version": 8,
@@ -251,8 +253,8 @@
     },
     {
       "label": "relief_services_accepted",
-      "at": "2026-10-18T11:50:39.524Z",
-      "elapsed_ms": 30357.961900000002,
+      "at": "2026-10-18T12:33:12.756Z",
+      "elapsed_ms": 30486.933800000003,
       "phase": "RELIEF",
       "projector_phase": "RELIEF",
       "world_version": 11,
@@ -314,8 +316,8 @@
     },
     {
       "label": "surge_50s_truthful_last_stage_failure",
-      "at": "2026-10-18T11:50:59.195Z",
-      "elapsed_ms": 50008.082,
+      "at": "2026-10-18T12:33:32.358Z",
+      "elapsed_ms": 50073.8923,
       "phase": "SURGE",
       "projector_phase": "SURGE",
       "world_version": 11,
@@ -377,8 +379,8 @@
     },
     {
       "label": "results_70s",
-      "at": "2026-10-18T11:51:19.397Z",
-      "elapsed_ms": 70261.6978,
+      "at": "2026-10-18T12:33:52.326Z",
+      "elapsed_ms": 70092.1825,
       "phase": "RESULTS",
       "projector_phase": "RESULTS",
       "world_version": 11,
@@ -440,7 +442,7 @@
     },
     {
       "label": "finished_75s",
-      "at": "2026-10-18T11:51:24.289Z",
+      "at": "2026-10-18T12:33:57.383Z",
       "elapsed_ms": 75000,
       "phase": "RESULTS",
       "projector_phase": "RESULTS",
@@ -503,7 +505,7 @@
     },
     {
       "label": "replay_reset_confirmed",
-      "at": "2026-10-18T11:51:24.395Z",
+      "at": "2026-10-18T12:33:57.492Z",
       "elapsed_ms": 0,
       "phase": "IDLE",
       "projector_phase": "IDLE",
@@ -531,79 +533,79 @@
   ],
   "websocket_snapshots": [
     {
-      "at": "2026-10-18T11:50:08.586Z",
+      "at": "2026-10-18T12:32:41.739Z",
       "version": 0,
       "phase": "ready",
       "stage": 0
     },
     {
-      "at": "2026-10-18T11:50:08.586Z",
+      "at": "2026-10-18T12:32:41.739Z",
       "version": 1,
       "phase": "ready",
       "stage": 0
     },
     {
-      "at": "2026-10-18T11:50:08.624Z",
+      "at": "2026-10-18T12:32:41.757Z",
       "version": 2,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:08.646Z",
+      "at": "2026-10-18T12:32:41.781Z",
       "version": 3,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:08.671Z",
+      "at": "2026-10-18T12:32:41.817Z",
       "version": 4,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:19.207Z",
+      "at": "2026-10-18T12:32:52.365Z",
       "version": 5,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:19.329Z",
+      "at": "2026-10-18T12:32:52.490Z",
       "version": 6,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:19.453Z",
+      "at": "2026-10-18T12:32:52.591Z",
       "version": 7,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:19.554Z",
+      "at": "2026-10-18T12:32:52.711Z",
       "version": 8,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:39.169Z",
+      "at": "2026-10-18T12:33:12.415Z",
       "version": 9,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:39.297Z",
+      "at": "2026-10-18T12:33:12.540Z",
       "version": 10,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:50:39.437Z",
+      "at": "2026-10-18T12:33:12.682Z",
       "version": 11,
       "phase": "disaster_active",
       "stage": 1
     },
     {
-      "at": "2026-10-18T11:51:24.309Z",
+      "at": "2026-10-18T12:33:57.425Z",
       "version": 12,
       "phase": "ready",
       "stage": 0

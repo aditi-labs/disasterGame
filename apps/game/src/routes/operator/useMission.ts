@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import type { LiveWorld } from "../../live/useLiveWorld";
-import type { ActionResult, TokenType, UV } from "../../types/contracts";
+import type { ActionResult, TokenType, UV, WorldSnapshot } from "../../types/contracts";
 import { openChannel, type ChannelMessage, type ProjectorCommand, type RejectionCue } from "../../game/channel";
 import { clockReducer, clockView, INITIAL_CLOCK, phaseOf, surgeActionId, surgeDue, inputOpen as clockInputOpen } from "../../game/clock";
 import { play, unlockAudio } from "../../game/sound";
@@ -44,9 +44,25 @@ export function useMission(world: LiveWorld) {
   const worldRef = useRef(world);
   worldRef.current = world;
   const operationPending = useRef(false);
-  const resultsSyncing = world.inFlight > 0 || world.status !== "live" || (world.snapshot?.world_version ?? -1) < world.knownVersion();
+  const phase = phaseOf(clock, now);
+  const [finalState, setFinalState] = useState<{ sessionId: string; snapshot: WorldSnapshot } | null>(null);
+  const finalSnapshot = phase === "RESULTS" && finalState?.sessionId === clock.sessionId ? finalState.snapshot : null;
+  const awaitingWorld = world.inFlight > 0 || world.status !== "live" || (world.snapshot?.world_version ?? -1) < world.knownVersion();
+  const resultsSyncing = awaitingWorld || (phase === "RESULTS" && !finalSnapshot);
+  const finalRef = useRef(finalSnapshot);
+  finalRef.current = finalSnapshot;
   const syncingRef = useRef(resultsSyncing);
   syncingRef.current = resultsSyncing;
+
+  // Capture once, after all UI acknowledgments have their authoritative snapshot.
+  // Late camera events still reach the world; they cannot rewrite this run's result.
+  useEffect(() => {
+    if (phase !== "RESULTS") {
+      setFinalState(null);
+    } else if (!finalSnapshot && !awaitingWorld && world.snapshot && clock.sessionId) {
+      setFinalState({ sessionId: clock.sessionId, snapshot: world.snapshot });
+    }
+  }, [phase, clock.sessionId, awaitingWorld, world.snapshot, finalSnapshot]);
 
   useEffect(() => {
     const onMessage = (m: ChannelMessage) => {
@@ -68,14 +84,13 @@ export function useMission(world: LiveWorld) {
 
   // Broadcast the clock to the projector (on change and every 250 ms).
   useEffect(() => {
-    const id = window.setInterval(() => channel.current?.post({ t: "clock", view: clockView(clockRef.current, performance.now()), sentAt: Date.now(), syncing: syncingRef.current }), 250);
+    const id = window.setInterval(() => channel.current?.post({ t: "clock", view: clockView(clockRef.current, performance.now()), sentAt: Date.now(), syncing: syncingRef.current, finalSnapshot: finalRef.current }), 250);
     return () => window.clearInterval(id);
   }, []);
   useEffect(() => {
-    channel.current?.post({ t: "clock", view: clockView(clock, performance.now()), sentAt: Date.now(), syncing: resultsSyncing });
-  }, [clock, resultsSyncing]);
+    channel.current?.post({ t: "clock", view: clockView(clock, performance.now()), sentAt: Date.now(), syncing: resultsSyncing, finalSnapshot });
+  }, [clock, resultsSyncing, finalSnapshot]);
 
-  const phase = phaseOf(clock, now);
   const lastPhase = useRef(phase);
   useEffect(() => {
     if (phase === lastPhase.current) return;
@@ -121,7 +136,7 @@ export function useMission(world: LiveWorld) {
    */
   const startGame = useCallback(async () => {
     const { scenario } = world;
-    if (operationPending.current || !["idle", "intro"].includes(clockRef.current.mode)) return;
+    if (operationPending.current || !["idle", "intro", "finished"].includes(clockRef.current.mode)) return;
     unlockAudio();
     setStartError(null);
     setNotice(null);
@@ -147,6 +162,7 @@ export function useMission(world: LiveWorld) {
       setRejections([]);
       clearAll();
       command("exit-tools");
+      if (clockRef.current.mode === "finished") dispatch({ type: "reset" });
       dispatch({ type: "start", sessionId, now: performance.now() });
       setStartedAt(new Date().toISOString());
       play("bell");
@@ -225,6 +241,7 @@ export function useMission(world: LiveWorld) {
     view: clockView(clock, now),
     inputOpen: clockInputOpen(clock, now) && world.status === "live" && world.inFlight === 0,
     resultsSyncing,
+    finalSnapshot,
     projector,
     startError,
     starting,
