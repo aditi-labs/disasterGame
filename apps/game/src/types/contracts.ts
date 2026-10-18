@@ -396,6 +396,8 @@ export interface ProjectionRegistration {
   board?: { width_mm: number; height_mm: number };
   markers?: { id: number; center_uv: UV }[];
   marker_size_mm?: number;
+  /** Per-marker sizes in mm, keyed by marker ID as string */
+  marker_sizes_mm?: Record<string, number>;
   occlusions?: Record<string, UV[]>;
 }
 

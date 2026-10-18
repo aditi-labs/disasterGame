@@ -12,6 +12,7 @@ import { makeFrame, polylineLength, SAFE, type Frame } from "../printFrame";
 import type { Cue } from "../reactions";
 import type { Results } from "../results";
 import { BEATS, CHAPTERS, HOW_TO_PLAY, MANU_STORY, MANU_TODAY, PIECE_NAME, SUBTITLE, TITLE } from "../story";
+import type { GamePhase } from "../clock";
 import type { BoardModel, PopulationMark } from "../worldAdapter";
 import { FloodLayer } from "./FloodLayer";
 import { MatsyaMark, PIECE_COLOR, PieceGlyph, PopulationCluster } from "./glyphs";
@@ -126,6 +127,7 @@ export function ProjectionScene(props: ProjectionSceneProps) {
             <>
               <Routes frame={frame} model={model} snapshot={snapshot} roads={roads} />
               <Populations frame={frame} model={model} names={names} compact={compact} />
+              <WanderingPeople frame={frame} model={model} />
               <Travellers frame={frame} snapshot={snapshot} />
               {!showResults && <FocusTargets frame={frame} focus={guide.focus} compact={compact} pulse={phase === "WARNING"} />}
               <Pieces frame={frame} model={model} radius={pieceRadius} compact={compact} />
@@ -164,6 +166,20 @@ export function ProjectionScene(props: ProjectionSceneProps) {
 
           {idle && !compact && !hold && <IdleScreen frame={frame} />}
           {!idle && !compact && !showResults && <Hud guide={guide} clock={clock} boat={boat} />}
+          {/* Big dramatic stage overlay text */}
+          {!idle && !compact && !showResults && model && (
+            <StageOverlay
+              frame={frame}
+              phase={guide.phase}
+              remainingMs={clock.remainingMs}
+              hasBridge={model.bridges.length > 0}
+              hasFacility={model.facilities.length > 0}
+            />
+          )}
+          {/* Game over overlay when majority cut off */}
+          {!idle && !compact && !showResults && model && (
+            <GameOverOverlay frame={frame} model={model} />
+          )}
           {!idle && !compact && !showResults && (latest?.headline || props.notices?.length) && (
             <Toast frame={frame} key={latest?.key ?? props.notices?.[0]} text={latest?.headline?.text ?? props.notices![0]} tone={latest?.headline?.tone ?? "bad"} />
           )}
@@ -196,9 +212,12 @@ export function ProjectionScene(props: ProjectionSceneProps) {
           {(props.registration?.markers?.map((m) => ({ id: m.id, center: m.center_uv })) ?? BOARD_MARKERS).map((m) => {
             const c = frame.printPt(m.center);
             const board = props.registration?.board;
-            const size = props.registration?.marker_size_mm;
+            // Use per-marker size if available, else global marker_size_mm, else fallback
+            const markerSizes = props.registration?.marker_sizes_mm as Record<string, number> | undefined;
+            const size = markerSizes?.[String(m.id)] ?? props.registration?.marker_size_mm;
+            // Calculate keepout size: half marker + 6mm margin, converted to print space
             const h = board && size ? ((size / 2 + 6) / board.width_mm) * frame.W : MARKER_KEEPOUT_HALF_UV * frame.W;
-            const v = board && size ? ((size / 2 + 6) / board.height_mm) * frame.H : MARKER_KEEPOUT_HALF_UV * frame.W;
+            const v = board && size ? ((size / 2 + 6) / board.height_mm) * frame.H : MARKER_KEEPOUT_HALF_UV * frame.H;
             return surface === "overlay" ? (
               <rect key={m.id} x={c.x - h} y={c.y - v} width={h * 2} height={v * 2} fill="#000" />
             ) : (
@@ -264,7 +283,52 @@ function Routes({ frame, model, snapshot, roads }: { frame: Frame; model: BoardM
   );
 }
 
-/** Small population markers walking along every route that is open, toward help. */
+/** Population dots wandering randomly when they have nowhere to go */
+function WanderingPeople({ frame, model }: { frame: Frame; model: BoardModel }) {
+  // Show wandering people at populations that are cut off or have unmet needs
+  const cutOffPops = model.populations.filter((p) => p.depotReachable === false || p.status === "danger");
+  const peoplePerPop = 8; // Number of wandering dots per population
+
+  // Generate random wander paths for each person
+  const wanderPath = (cx: number, cy: number, radius: number, seed: number) => {
+    const points: string[] = [];
+    const steps = 6;
+    for (let i = 0; i <= steps; i++) {
+      const angle = (seed + i * 60) * (Math.PI / 180);
+      const r = radius * (0.3 + 0.7 * Math.sin(seed + i * 1.5));
+      const x = cx + r * Math.cos(angle + seed * 0.1);
+      const y = cy + r * Math.sin(angle + seed * 0.1);
+      points.push(i === 0 ? `M${x} ${y}` : `L${x} ${y}`);
+    }
+    points.push("Z");
+    return points.join(" ");
+  };
+
+  return (
+    <g className="layer-wandering" pointerEvents="none">
+      {cutOffPops.map((p) => {
+        const c = frame.pt(p.uv);
+        return (
+          <g key={`wander-${p.siteId}`}>
+            {Array.from({ length: peoplePerPop }, (_, i) => {
+              const seed = (p.siteId.charCodeAt(0) * 7 + i * 37) % 360;
+              const radius = 50 + (i % 3) * 25;
+              const d = wanderPath(c.x, c.y, radius, seed);
+              const dur = 2.5 + (i % 4) * 0.5;
+              return (
+                <circle key={i} r={16} className="wanderer" style={{ animationDelay: `${i * 0.3}s` }}>
+                  <animateMotion dur={`${dur}s`} repeatCount="indefinite" path={d} />
+                </circle>
+              );
+            })}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+/** Large population markers walking along every route that is open, toward help. */
 function Travellers({ frame, snapshot }: { frame: Frame; snapshot: WorldSnapshot }) {
   const routes = (snapshot.service_routes ?? []).filter((r) => r.reachable && (r.board_uv?.length ?? 0) >= 2).map((r) => ({ key: `${r.population_id}-${r.service}`, path: r.board_uv! }));
   const lifelines = (snapshot.mission?.lifelines ?? []).filter((l) => l.reachable && l.board_uv.length >= 2 && !routes.some((r) => r.key.startsWith(l.population_id))).map((l) => ({ key: `life-${l.population_id}`, path: l.board_uv }));
@@ -275,9 +339,9 @@ function Travellers({ frame, snapshot }: { frame: Frame; snapshot: WorldSnapshot
         const seconds = Math.max(2.5, Math.min(7, polylineLength(frame, path) / 140));
         return (
           <g key={key}>
-            {[0, 1, 2].map((i) => (
-              <circle key={i} r={6} className="traveller">
-                <animateMotion dur={`${seconds}s`} begin={`${(i * seconds) / 3}s`} repeatCount="indefinite" path={d} />
+            {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+              <circle key={i} r={18} className="traveller-large">
+                <animateMotion dur={`${seconds}s`} begin={`${(i * seconds) / 7}s`} repeatCount="indefinite" path={d} />
               </circle>
             ))}
           </g>
@@ -386,10 +450,16 @@ function Pieces({ frame, model, radius, compact }: { frame: Frame; model: BoardM
         const color = b.connected ? PALETTE.route : PALETTE.inkSoft;
         return (
           <g key={b.tokenId} transform={`translate(${c.x} ${c.y})`} className={`piece piece-bridge ${b.connected ? "on" : "off"}`}>
-            {/* A soft light outlines the accepted bridge. */}
+            {/* Dramatic green glow when bridge is connected - VERY BIG */}
+            {b.connected && (
+              <>
+                <circle r={r + 100} className="piece-glow-outer" style={{ fill: PALETTE.route }} />
+                <circle r={r + 70} className="piece-glow-inner" style={{ fill: PALETTE.route }} />
+              </>
+            )}
             <g transform={`rotate(${angle})`}>
               <rect x={-r - 14} y={-r * 0.55 - 14} width={(r + 14) * 2} height={(r * 0.55 + 14) * 2} rx={22} fill={color} opacity={0.22} filter="url(#soft-light)" />
-              <rect x={-r - 6} y={-r * 0.55 - 6} width={(r + 6) * 2} height={(r * 0.55 + 6) * 2} rx={18} className="bridge-outline" style={{ stroke: color }} />
+              <rect x={-r - 6} y={-r * 0.55 - 6} width={(r + 6) * 2} height={(r * 0.55 + 6) * 2} rx={18} className={`bridge-outline ${b.connected ? "glow-green" : ""}`} style={{ stroke: color }} />
             </g>
             {!compact && <Label y={-r - 30} text={b.connected ? "BRIDGE CONNECTED" : "BRIDGE PLACED"} className={`piece-label tone-${b.connected ? "good" : "info"}`} size={22} />}
           </g>
@@ -402,8 +472,19 @@ function Pieces({ frame, model, radius, compact }: { frame: Frame; model: BoardM
         const color = on ? PIECE_COLOR[f.type] ?? PALETTE.ink : PALETTE.danger;
         return (
           <g key={f.tokenId} transform={`translate(${c.x} ${c.y})`} className={`piece piece-facility ${on ? "on" : "off"}`}>
-            <circle r={r + 16} fill={color} opacity={0.2} filter="url(#soft-light)" />
-            <circle r={r + 4} className={`piece-ring ${on ? "on" : "off"}`} style={{ stroke: color }} />
+            {/* Dramatic glow when facility is active - green for working, red for not - VERY BIG */}
+            {on ? (
+              <>
+                <circle r={r + 90} className="piece-glow-outer" style={{ fill: PALETTE.route }} />
+                <circle r={r + 60} className="piece-glow-inner" style={{ fill: PALETTE.route }} />
+              </>
+            ) : (
+              <>
+                <circle r={r + 80} className="piece-glow-danger" style={{ fill: PALETTE.danger }} />
+              </>
+            )}
+            <circle r={r + 16} fill={color} opacity={0.25} filter="url(#soft-light)" />
+            <circle r={r + 4} className={`piece-ring ${on ? "on glow-green" : "off glow-red"}`} style={{ stroke: color }} />
             <g transform={`translate(${r + 26} ${-r})`}><PieceGlyph type={f.type} size={26} color={color} /></g>
             {!compact && <Label y={r + 34} text={!f.supplied || !f.serving ? `${PIECE_NAME[f.type]} · NO ONE CAN REACH IT` : f.full ? `${PIECE_NAME[f.type]} · FULL ${f.used}/${f.capacity}` : `${PIECE_NAME[f.type]} · ${f.used}/${f.capacity}`} className={`cap-label tone-${on ? "good" : "danger"}`} size={21} />}
           </g>
@@ -542,6 +623,93 @@ function TestPattern({ frame }: { frame: Frame }) {
           </g>
         );
       })}
+    </g>
+  );
+}
+
+/** Game over overlay when majority of populations are cut off */
+function GameOverOverlay({ frame, model }: { frame: Frame; model: BoardModel }) {
+  // Count populations in danger vs total
+  const total = model.populations.length;
+  const cutOff = model.populations.filter((p) => p.depotReachable === false).length;
+  const inDanger = model.populations.filter((p) => p.status === "danger").length;
+  const affected = Math.max(cutOff, inDanger);
+  const percentAffected = total > 0 ? (affected / total) * 100 : 0;
+
+  // Only show game over when majority (>50%) are affected
+  if (percentAffected <= 50) return null;
+
+  const cx = frame.W / 2;
+  const cy = frame.H / 2;
+
+  return (
+    <g className="layer-game-over" pointerEvents="none">
+      {/* Red overlay */}
+      <rect width={frame.W} height={frame.H} className="game-over-bg" />
+      {/* Big game over text */}
+      <text x={cx} y={cy - 40} className="game-over-text">FLOOD CRISIS</text>
+      <text x={cx} y={cy + 30} className="game-over-subtext">
+        {`${affected} of ${total} communities cut off`}
+      </text>
+      <text x={cx} y={cy + 80} className="game-over-hint">
+        Place pieces to restore access!
+      </text>
+    </g>
+  );
+}
+
+/** Big dramatic stage overlay text showing current objective + timer */
+function StageOverlay({ frame, phase, remainingMs, hasBridge, hasFacility }: {
+  frame: Frame;
+  phase: GamePhase;
+  remainingMs: number;
+  hasBridge: boolean;
+  hasFacility: boolean;
+}) {
+  const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
+  const timeStr = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+
+  // Determine what big text to show based on phase and state
+  let stageText: string | null = null;
+  let stageColor = PALETTE.highlight;
+
+  if (phase === "WARNING") {
+    stageText = "FLOOD WARNING!";
+    stageColor = PALETTE.danger;
+  } else if (phase === "CROSSING" && !hasBridge) {
+    stageText = "PLACE THE BRIDGE!";
+    stageColor = PALETTE.highlight;
+  } else if (phase === "RELIEF" && !hasFacility) {
+    stageText = "CHOOSE: HOSPITAL OR FOOD";
+    stageColor = PALETTE.route;
+  } else if (phase === "SURGE") {
+    stageText = "BRACE FOR SURGE!";
+    stageColor = PALETTE.danger;
+  }
+
+  // Don't show during IDLE, INTRO, RESULTS, or when objectives are met
+  if (!stageText) return null;
+
+  const cx = frame.W / 2;
+  const cy = frame.H * 0.35;
+
+  return (
+    <g className="layer-stage-overlay" pointerEvents="none">
+      {/* Big centered stage text */}
+      <text
+        x={cx}
+        y={cy}
+        className="stage-text"
+        style={{ fill: stageColor }}
+      >
+        {stageText}
+      </text>
+
+      {/* Large timer in top-right corner */}
+      <g className="stage-timer" transform={`translate(${frame.W - 120} 80)`}>
+        <rect x={-70} y={-45} width={140} height={70} rx={12} className="stage-timer-bg" />
+        <text x={0} y={12} className="stage-timer-text">{timeStr}</text>
+      </g>
     </g>
   );
 }

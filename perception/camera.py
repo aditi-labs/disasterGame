@@ -71,7 +71,12 @@ class DeviceSource:
         self.open()
 
     def open(self) -> None:
-        cap = cv2.VideoCapture(self.index)
+        import sys
+        # Use DSHOW backend on Windows - MSMF often fails with virtual cameras
+        if sys.platform == "win32":
+            cap = cv2.VideoCapture(self.index, cv2.CAP_DSHOW)
+        else:
+            cap = cv2.VideoCapture(self.index)
         if not cap.isOpened():
             raise RuntimeError(f"camera index {self.index} could not be opened")
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width_req)

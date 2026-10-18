@@ -349,6 +349,11 @@ export function OperatorRoute() {
 
           <h3>Detection</h3>
           <Detection world={world} />
+
+          {/* LIVE CAMERA FEED - Always visible */}
+          <h3>Live Camera Feed</h3>
+          <CameraFeedPanel world={world} />
+
           <div className="btn-row">
             <button className="btn" onClick={mission.clearPending}>
               CLEAR PENDING DETECTION
@@ -630,6 +635,63 @@ function CameraCalibration({ world }: { world: ReturnType<typeof useLiveWorld> }
         <li>reprojection RMS: <b>{telemetry.rmsUv != null ? String(telemetry.rmsUv) + " UV" : "UV not reported"} / {telemetry.rmsPx != null ? String(telemetry.rmsPx) + " px" : "px not reported"}</b></li>
       </ul>
       {!telemetry.registrationReady && <p className="notice">Automated placement must stay blocked until the perception service reports a valid measured ArUco calibration. Its print UV still requires a reviewed transform into world UV.</p>}
+    </div>
+  );
+}
+
+/** Live camera feed panel - always visible on operator screen */
+function CameraFeedPanel({ world }: { world: ReturnType<typeof useLiveWorld> }) {
+  const p = world.perception ?? {};
+  const frame = typeof p.frame_url === "string" ? p.frame_url : null;
+  const observations = [...world.observations.values()];
+  const telemetry = perceptionView(world.perception, world.health?.perceptron_status);
+
+  return (
+    <div className="camera-feed-panel">
+      <div className="camera-status-bar">
+        <span className={`camera-indicator ${telemetry.camera.tone}`}>
+          ● {telemetry.camera.value}
+        </span>
+        <span className="camera-fps">FPS: {telemetry.fps ?? "–"}</span>
+        <span className="camera-latency">Latency: {world.visionLatency ?? "–"} ms</span>
+        <span className={`perceptron-indicator ${telemetry.perceptron.tone}`}>
+          Perceptron: {telemetry.perceptron.value}
+        </span>
+      </div>
+      <div className="camera-frame-container">
+        {frame ? (
+          <img src={frame} alt="Live camera feed" className="camera-feed-image" />
+        ) : (
+          <div className="camera-feed-placeholder">
+            <span>📷 No camera feed</span>
+            <span className="small">Start perception with -WithPerception flag</span>
+          </div>
+        )}
+        {/* Detection overlay info */}
+        {observations.length > 0 && (
+          <div className="detection-overlay">
+            {observations.map((o) => (
+              <div key={o.token_id} className={`detection-badge ${o.vision_status}`}>
+                <b>{o.object_type?.toUpperCase()}</b>
+                <span>{o.vision_status === "pending" ? "DETECTING..." : o.vision_status?.toUpperCase()}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {observations.length > 0 && (
+        <div className="detection-details">
+          {observations.map((o) => (
+            <div key={o.token_id} className={`detection-item ${o.vision_status}`}>
+              <PieceIcon type={o.object_type} size={16} />
+              <span className="detection-type">{o.object_type}</span>
+              <span className={`detection-status ${o.vision_status}`}>{o.vision_status}</span>
+              <span className="detection-pos">UV: [{o.board_uv.map((n) => n.toFixed(2)).join(", ")}]</span>
+              {o.stable_ms != null && <span className="detection-stable">stable {o.stable_ms}ms</span>}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(python:*)",
+      "Bash(curl:*)",
+      "Bash(tasklist:*)",
+      "Bash(powershell:*)",
+      "Bash(start:*)",
+      "Bash(start \"\" \"C:\\\\Program Files\\\\DroidCam\\\\droidcam.exe\")",
+      "Bash(dir:*)",
+      "Bash(ping:*)",
+      "Bash(npm run dev:*)",
+      "Bash(timeout:*)",
+      "Bash(cmd /c \"cd /d C:\\\\code\\\\FloodGame\\\\disasterGame && .venv\\\\Scripts\\\\activate && uvicorn backend.main:app --port 8010 --reload\")",
+      "Bash(cmd /c \"cd /d C:\\\\code\\\\FloodGame\\\\disasterGame\\\\apps\\\\game && npm run dev\")",
+      "Bash(cmd /c \"ping -n 8 127.0.0.1 >nul && curl -s http://localhost:8010/health\")",
+      "Bash(C:\\\\code\\\\FloodGame\\\\disasterGame\\\\.venv\\\\Scripts\\\\python.exe -m uvicorn:*)",
+      "Bash(/mnt/c/code/FloodGame/disasterGame/.venv/Scripts/python.exe -m uvicorn:*)",
+      "Bash(powershell.exe -Command \"cd ''C:\\\\code\\\\FloodGame\\\\disasterGame''; .\\\\.venv\\\\Scripts\\\\Activate.ps1; uvicorn backend.main:app --port 8010 --reload\")",
+      "Bash(powershell.exe -Command \"cd ''C:\\\\code\\\\FloodGame\\\\disasterGame\\\\apps\\\\game''; npm run dev\")",
+      "Bash(powershell.exe -Command \"cd ''C:\\\\code\\\\FloodGame\\\\disasterGame''; .\\\\.venv\\\\Scripts\\\\Activate.ps1; python -m perception.service --source 3 --observe-url http://localhost:8010/perception/physical --status-url http://localhost:8010/perception/status --classifier perception.classifier:create_classifier\")"
+    ]
+  }
+}

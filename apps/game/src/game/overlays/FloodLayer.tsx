@@ -105,19 +105,31 @@ function FloodStage({ id, ripple, frame, shapes, earlier }: { id: string; ripple
           <ShapePaint shapes={shapes} color="#000" />
           <ShapePaint shapes={earlier} color="#000" />
         </mask>
+        <mask id={`${id}-edge`} maskUnits="userSpaceOnUse" x={0} y={0} width={frame.W} height={frame.H}>
+          <rect width={frame.W} height={frame.H} fill="#000" />
+          <ShapePaint shapes={shapes} color="#fff" grow={18} />
+          <ShapePaint shapes={shapes} color="#000" />
+          <ShapePaint shapes={earlier} color="#000" grow={18} />
+        </mask>
         <clipPath id={`${id}-reveal`}>
           <rect className="flood-reveal" x={x0} y={y0} width={x1 - x0} height={y1 - y0} />
         </clipPath>
       </defs>
       <g clipPath={`url(#${id}-reveal)`}>
+        {/* SOLID FLOOD FILL - covers the entire flooded area */}
         <g mask={`url(#${id}-water)`}>
-          <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} fill={PALETTE.water} opacity={0.55} />
+          {/* Base solid blue - completely fills the flood zone */}
+          <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} fill="#0055bb" />
+          {/* Lighter overlay for depth */}
+          <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} fill="#2288ff" opacity={0.5} />
+          {/* Ripple pattern on top */}
           <g className="flood-drift">
             <rect x={x0 - 80} y={y0} width={x1 - x0 + 160} height={y1 - y0} fill={`url(#${ripple})`} />
           </g>
         </g>
+        {/* Bright edge glow around flood boundary */}
         <g mask={`url(#${id}-rim)`} className="flood-lip">
-          <ShapePaint shapes={shapes} color={PALETTE.waterDeep} grow={5} />
+          <ShapePaint shapes={shapes} color="#00ccff" grow={16} />
         </g>
       </g>
     </g>

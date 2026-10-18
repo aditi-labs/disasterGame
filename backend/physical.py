@@ -67,7 +67,8 @@ def load_registration(mapping_path: Path, markers_path: Path, scenario_id: str):
         sizes = markers["aruco"].get("marker_sizes_mm") or {}
         # Projector keep-outs use the largest measured marker when sizes differ per marker.
         mask_size = markers["aruco"].get("marker_size_mm") or (max(sizes.values()) if sizes else None)
-        result.update(board=markers["board"], markers=markers["markers"], marker_size_mm=mask_size)
+        # Include per-marker sizes for more accurate keepouts in the projector UI
+        result.update(board=markers["board"], markers=markers["markers"], marker_size_mm=mask_size, marker_sizes_mm=sizes if sizes else None)
         mapping = json.loads(mapping_path.read_text(encoding="utf-8"))
         if mapping.get("status") != "MEASURED" or mapping.get("scenario_id") != scenario_id:
             return result

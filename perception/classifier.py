@@ -309,9 +309,12 @@ class PieceClassifier:
                 response = self._adapter._classify_sync(roi_image, self.TARGET_CLASSES)
 
             result = self._process_response(track_id, response)
+            # Fall back to color if Perceptron failed
+            if not result.valid and self.config.validate_color:
+                result = self._classify_by_color(track_id, roi_image)
         else:
-            result = ClassificationResult(track_id, None, "perceptron", None, False,
-                                          evidence="Perceptron unavailable; no automatic color substitution")
+            # Perceptron unavailable - use color-based fallback
+            result = self._classify_by_color(track_id, roi_image)
 
         self._cache_result(track_id, result)
 
