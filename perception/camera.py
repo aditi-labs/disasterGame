@@ -498,6 +498,49 @@ class CameraWorker:
                 self._latest = frame
 
 
+    # -- convenience API (documented by Lane C's integration guide)
+    def read_frame(self, timeout_s: float = 2.0) -> Frame | None:
+        """Block up to ``timeout_s`` for the next new frame."""
+        return self.wait_for_frame(timeout_s)
+
+    def stream_frames(self, *, stop_when_ended: bool = True) -> Iterable[Frame]:
+        return iter_frames(self, stop_when_ended=stop_when_ended)
+
+
+DROIDCAM_DEFAULT_PORT = 4747
+
+
+def droidcam_url(ip: str, port: int = DROIDCAM_DEFAULT_PORT) -> str:
+    """DroidCam's MJPEG endpoint for OpenCV (``http://<ip>:4747/video``)."""
+    return f"http://{ip}:{port}/video"
+
+
+def list_cameras(max_index: int = 8, width: int = 1280, height: int = 720) -> list[dict]:
+    """Working camera indices as plain dicts (name hints are best-effort, macOS only)."""
+    return [p.__dict__ for p in enumerate_cameras(max_index, width, height)]
+
+
+def connect_droidcam(ip: str | None = None, port: int = DROIDCAM_DEFAULT_PORT, *, use_usb: bool = False,
+                     index: int | None = None, width: int = 1280, height: int = 720,
+                     stale_frame_ms: int = 1500) -> CameraWorker:
+    """Open DroidCam and return a started :class:`CameraWorker`.
+
+    * ``ip`` given: the phone's Wi-Fi MJPEG feed.
+    * ``use_usb``: DroidCam over USB needs ``adb forward tcp:4747 tcp:4747`` on the laptop,
+      after which the feed is at ``127.0.0.1:4747``; that is what is opened.
+    * ``index`` given (or neither of the above): the DroidCam *client's* virtual camera
+      device, found with :func:`list_cameras` (``"auto"`` picks the first working index).
+    Nothing here pretends a feed is up: a source that cannot be opened raises.
+    """
+    if ip:
+        source = StreamSource(droidcam_url(ip, port))
+    elif use_usb:
+        source = StreamSource(droidcam_url("127.0.0.1", port))
+    else:
+        source = open_source("auto" if index is None else index, width, height)
+    return CameraWorker(source, stale_frame_ms=stale_frame_ms).start()
+
+
 def iter_frames(worker: CameraWorker, *, stop_when_ended: bool = True) -> Iterable[Frame]:
     """Convenience generator for scripts and tests."""
     while True:

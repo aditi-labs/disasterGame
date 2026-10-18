@@ -249,12 +249,14 @@ class PieceTracker:
                 result.request_id != track.classification_pending_request:
             return False  # stale answer for an older request
         track.classification_pending_request = None
-        if not result.valid:
+        if not result.valid or result.piece_class is None:
+            # "valid but no class" (model unsure, unknown/none) is a legitimate answer (spec 7.2),
+            # but it must not freeze the track as classified: keep asking.
             track.classification = ClassInfo(None, result.class_source, None, False, now_ms,
                                              track.last_candidate.appearance if track.last_candidate else None,
                                              result.latency_ms, result.evidence)
             track.needs_classification = True
-            track.classification_reason = "retry_invalid_result"
+            track.classification_reason = "retry_invalid_result" if not result.valid else "retry_unknown_class"
             return True
         track.classification = ClassInfo(result.piece_class, result.class_source, result.confidence, True, now_ms,
                                          track.last_candidate.appearance if track.last_candidate else None,

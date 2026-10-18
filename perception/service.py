@@ -50,6 +50,7 @@ from .camera import CameraWorker, Frame, enumerate_cameras, open_source
 from .candidate_regions import Candidate, CandidateDetector, crop_roi
 from .config import PerceptionConfig, REPO_ROOT
 from .confidence import score
+from .control import ControlServer
 from .debug_view import draw_camera_view, draw_warp_view, load_sites
 from .events import (
     BoardUV,
@@ -200,6 +201,9 @@ class PerceptionService:
         self.status_poster: HttpPoster | None = HttpPoster(cfg.service.status_url, timeout_s=cfg.service.http_timeout_s,
                                                            queue_size=16, name="status-sink") if cfg.service.status_url else None
         self.camera: CameraWorker | None = None
+        self.control: ControlServer | None = None
+        if cfg.service.control_port is not None:
+            self.control = ControlServer(self, cfg.service.control_host, cfg.service.control_port).start()
         self.registration_state: RegistrationState | None = None
         self.last_frame: Frame | None = None
         self.last_warped: np.ndarray | None = None
@@ -243,6 +247,8 @@ class PerceptionService:
     def stop(self) -> None:
         if self.camera is not None:
             self.camera.stop()
+        if self.control is not None:
+            self.control.stop()
         self.sink.close()
         self.classifier.close()
         if self.status_poster is not None:
@@ -343,6 +349,8 @@ class PerceptionService:
     # ---------------------------------------------------------------- per frame
     def process_frame(self, frame: Frame) -> list[PhysicalObservation]:
         t0 = time.perf_counter()
+        if self.control is not None:
+            self.control.apply_pending()
         now = frame.captured_at_ms
         self.last_frame = frame
         image = frame.image
@@ -600,11 +608,33 @@ class PerceptionService:
         now = now_ms()
         reg = self.registration_state
         proc_ms = (sum(self._process_times) / len(self._process_times) * 1000.0) if self._process_times else None
+        classifier_status = self.classifier.status()
+        cam_health = self.camera.health().as_dict() if self.camera else {"connected": False, "source": self.cfg.camera.source}
+        if reg is None or not reg.valid:
+            calibration = "uncalibrated"
+        elif reg.held or reg.degraded:
+            calibration = "held" if reg.held else "degraded"
+        elif self.registration.verified:
+            calibration = "calibrated"
+        else:
+            calibration = "valid_unmeasured"
+        if classifier_status.get("kind") == "none":
+            perceptron = "not_connected"
+        else:
+            perceptron = "ready" if classifier_status.get("available") else "degraded"
         return {
+            # Flat keys the retained gateway (/perception/status, /health) and spec section 9 status line read.
+            # They never overstate: a photo-estimated registration is "valid_unmeasured", never "calibrated".
+            "mode": ("recording" if (self.last_frame is not None and self.last_frame.provenance.startswith("recording:"))
+                     or str(cam_health.get("source", "")).startswith("recording:") else "live"),
+            "calibration": calibration,
+            "perceptron": perceptron,
+            "objects_tracked": len(self.tracker.tracks),
             "perception_version": __version__,
             "session_id": self.session_id,
             "paused": self.paused,
-            "camera": self.camera.health().as_dict() if self.camera else {"connected": False, "source": self.cfg.camera.source},
+            "camera": cam_health,
+            "control": self.control.status() if self.control else None,
             "undistortion": "measured_intrinsics" if self.undistorter else "none",
             "parallax_correction": self.cfg.service.parallax_correction,
             "registration": reg.as_status(now, self.registration) if reg else {"valid": False, "reason": "no frame yet",
@@ -616,7 +646,7 @@ class PerceptionService:
                           "changed_fraction": round(self.detector.changed_fraction, 3)},
             "candidates": len(self.last_candidates),
             "tracks": self.tracker.snapshot(),
-            "classifier": self.classifier.status(),
+            "classifier": classifier_status,
             "sinks": self.sink.status(),
             "status_sink": self.status_poster.status() if self.status_poster else None,
             "observations_emitted": self.observations_emitted,
@@ -869,6 +899,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--structure-gate", action="store_true", help="projector-safe candidate mode")
     p.add_argument("--parallax", choices=["intrinsics", "approximate", "off"])
     p.add_argument("--max-seconds", type=float, help="stop after N seconds (headless smoke test / timed recording)")
+    p.add_argument("--control-port", type=int, help="serve the operator/adapter control API on this port (see perception/control.py)")
+    p.add_argument("--control-host", default=None)
     return p
 
 
@@ -906,7 +938,22 @@ def config_from_args(args: argparse.Namespace) -> PerceptionConfig:
         cfg.service.parallax_correction = args.parallax
     if args.max_seconds:
         cfg.service.max_seconds = args.max_seconds
+    if args.control_port is not None:
+        cfg.service.control_port = args.control_port
+    if args.control_host:
+        cfg.service.control_host = args.control_host
     return cfg
+
+
+LEGACY_OBSERVE_SUFFIX = "/perception/observe"
+
+
+def observe_url_is_legacy_gateway(url: str | None) -> bool:
+    """The retained gateway's /perception/observe takes the legacy ObjectObservation, not
+    PhysicalObservation, and converts every confirmed observation into a placement
+    (docs/INTEGRATION_CONTRACT.md).  Posting there would misfile lifecycle and class
+    fields, so the service refuses it.  Point --observe-url at the shared adapter."""
+    return bool(url) and url.rstrip("/").endswith(LEGACY_OBSERVE_SUFFIX)
 
 
 def apply_marker_overrides(registration: BoardRegistration, args: argparse.Namespace) -> None:
@@ -934,6 +981,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"index {p.index}: {'OK' if p.ok else 'no'} {p.width}x{p.height} {p.name_hint or ''} {p.error or ''}")
         print("DroidCam without a virtual-camera driver: pass --source http://<phone-ip>:4747/video")
         return 0
+    if observe_url_is_legacy_gateway(cfg.service.observe_url):
+        print(f"[perception] ERROR: --observe-url {cfg.service.observe_url} is the retained gateway's legacy endpoint; "
+              "it does not accept PhysicalObservation (see docs/INTEGRATION_CONTRACT.md). "
+              "Point it at the shared observation adapter instead.", file=sys.stderr)
+        return 2
     registration = BoardRegistration.load(cfg.board.registration_path)
     apply_marker_overrides(registration, args)
     if args.calibrate:

@@ -42,6 +42,10 @@ class Lifecycle(str, Enum):
     LOST = "lost"             # track vanished before it was ever stable
 
 
+#: Spec section 5 calls this type ``PhysicalLifecycle``; Lane C code imports it under that name.
+PhysicalLifecycle = Lifecycle
+
+
 class ConfidenceBand(str, Enum):
     HIGH = "high"
     REVIEW = "review"

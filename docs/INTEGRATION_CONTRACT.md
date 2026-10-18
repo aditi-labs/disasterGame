@@ -60,3 +60,23 @@ The shared adapter still needs to transform print UV into world UV using reviewe
 The marker source is now `perception/board_registration.json`: photo-verified TL 10, TR 11, BR 13, BL 12, with unmeasured centres and paper size. Its print frame differs from the square world extent. Physical projection and reticles are held at BOARD REGISTRATION REQUIRED until a measured mapping is implemented; screen rehearsal remains available through M / `?mode=screen`. A saved projector pixel adjustment does not set alignment verified or claim CALIBRATED.
 
 `CLEAR PENDING DETECTION` clears UI candidate outlines only. Reset clears world state and UI caches; neither operation clears the external perception service's track mapping. That mapping must be reset by its owner. No camera readiness or confidence is fabricated.
+
+## Lane B additions after merging `origin/main` at `9a66c47`
+
+- `python -m perception.service --control-port 8011` exposes the owner-side control the paragraph
+  above asks for: `POST /control/reset` clears the perception session (track IDs, world-token
+  bindings, pending candidates, caches) without restarting hardware; `POST /control/feedback`
+  `{track_id, accepted, world_token_id?, rejection_reason?}` is how the shared adapter returns
+  bindings/rejections so the tracker can emit `moved` for bound tracks and re-`placed` after a
+  rejection; `clear_pending`, `reference`, `recalibrate`, `pause`, `operator_class`, `reemit`,
+  `exclusions` and `GET /status` complete it (`perception/control.py`). Commands apply on the next
+  processed frame.
+- The service refuses `--observe-url .../perception/observe` by design; the adapter owns the
+  mapping to legacy actions, including `food_station` -> `food_shelter` and print UV -> world UV.
+- Status now also carries flat keys for the retained gateway: `mode`, `calibration`
+  (`uncalibrated` / `held` / `degraded` / `valid_unmeasured` / `calibrated`), `perceptron`
+  (`not_connected` / `degraded` / `ready`), `objects_tracked`. `calibrated` appears only after a
+  MEASURED registration.
+- Dev 2's classifier is driven through `perception/classifier_port.py` so a single lifecycle
+  emits observations; `perception/fusion.py` duplicates that lifecycle and does not currently
+  import, and is not on the runtime path (flagged for Lane C).

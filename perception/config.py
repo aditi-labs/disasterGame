@@ -123,6 +123,8 @@ class ServiceConfig:
     parallax_max_correction_mm: float = 10.0   # larger corrections mean an implausible pose: skip, flag
     parallax_min_camera_height_mm: float = 400.0  # a solved camera closer than this to the board is not trusted
     max_seconds: float | None = None           # headless runs / smoke tests: stop after this long
+    control_port: int | None = None            # operator/adapter control API (perception/control.py); None = off
+    control_host: str = "127.0.0.1"
     piece_height_mm: dict = field(default_factory=lambda: {
         "bridge": 13.0, "hospital": 22.0, "shelter": 22.0, "food_station": 22.0, "unknown": 17.0})
     live_captures_dir: str = "assets/live_captures"
