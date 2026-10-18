@@ -8,3 +8,11 @@ There is **no recorded frame of the real board with its ArUco markers in any rep
 Record one with `python -m perception.service --record assets/live_captures/<run>` over the
 physical board; recordings go in `assets/live_captures/` (gitignored) and are referenced from
 `docs/BOARD_REGISTRATION.md` with date, camera and operator.
+
+## Real board photo (added 2026-10-18)
+
+| File | Provenance | What it is |
+|---|---|---|
+| `real_board_photo_2026-10-18_portrait_1400.jpg` | Phone photo supplied by the team on 2026-10-18 (original 3213x5712), downscaled to 1400 px tall | The **actual printed map with its four ArUco markers**, lying on carpet, photographed with the map rotated 90 deg clockwise (portrait). Perspective, not rectified. |
+
+Verified from it (see `docs/BOARD_REGISTRATION.md`): 4X4 dictionary family, IDs 10/11/12/13, their corner layout, identical printed rotation. **Not** verified: millimetre positions, marker size, paper size.

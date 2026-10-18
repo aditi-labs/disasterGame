@@ -181,18 +181,46 @@ def make_detector(dictionary_name: str):
     params = cv2.aruco.DetectorParameters()
     params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
     params.cornerRefinementWinSize = 5
+    # The real markers are large (about 13 % of the print) and sit close to the paper edge;
+    # allow wide adaptive-threshold windows and nearby candidates.
+    params.adaptiveThreshWinSizeMax = 73
+    params.minMarkerDistanceRate = 0.01
     return cv2.aruco.ArucoDetector(dictionary_by_name(dictionary_name), params)
 
 
-def detect_markers(detector, frame: np.ndarray) -> list[MarkerDetection]:
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if frame.ndim == 3 else frame
+EDGE_PAD_PX = 48
+
+
+def _run_detector(detector, gray: np.ndarray, offset: float = 0.0) -> list[MarkerDetection]:
     corners, ids, _ = detector.detectMarkers(gray)
     out: list[MarkerDetection] = []
     if ids is None:
         return out
     for c, marker_id in zip(corners, ids.flatten()):
-        out.append(MarkerDetection(int(marker_id), np.asarray(c, dtype=np.float64).reshape(4, 2)))
+        out.append(MarkerDetection(int(marker_id), np.asarray(c, dtype=np.float64).reshape(4, 2) - offset))
     return out
+
+
+def detect_markers(detector, frame: np.ndarray, expected_ids: set[int] | None = None) -> list[MarkerDetection]:
+    """Detect markers; if any expected ID is missing, retry once on a white-padded frame.
+
+    Lesson from the first real board photo (2026-10-18): a marker whose paper touches
+    the image border loses its quiet zone and silently fails to decode.  Padding the
+    frame restores it.  The retry costs nothing when every expected marker is found.
+    """
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if frame.ndim == 3 else frame
+    found = _run_detector(detector, gray)
+    if expected_ids:
+        missing = expected_ids - {d.marker_id for d in found}
+        if missing:
+            padded = cv2.copyMakeBorder(gray, EDGE_PAD_PX, EDGE_PAD_PX, EDGE_PAD_PX, EDGE_PAD_PX,
+                                        cv2.BORDER_CONSTANT, value=255)
+            seen = {d.marker_id for d in found}
+            for d in _run_detector(detector, padded, offset=EDGE_PAD_PX):
+                if d.marker_id in missing and d.marker_id not in seen:
+                    found.append(d)
+                    seen.add(d.marker_id)
+    return found
 
 
 def scan_dictionaries(frame: np.ndarray, names: list[str]) -> dict[str, list[int]]:
@@ -325,7 +353,7 @@ class BoardRegistrar:
 
     # -- public
     def detect(self, frame: np.ndarray) -> list[MarkerDetection]:
-        return detect_markers(self.detector, frame)
+        return detect_markers(self.detector, frame, expected_ids=set(self.registration.markers))
 
     def update(self, frame: np.ndarray, now_ms: int | None = None,
                detections: list[MarkerDetection] | None = None) -> RegistrationState:

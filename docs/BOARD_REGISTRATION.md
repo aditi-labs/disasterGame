@@ -5,23 +5,35 @@ Owner: Detection Dev 1 (Lane B). Source of truth for values: the **physical boar
 FLOODSHIFT_MASTER_BUILD_SPEC section 2 (retain existing markers), 6.2–6.4, 8 (asset inventory),
 10 (no fake data).
 
-## Current status: UNVERIFIED
+## Current status: IDs and layout verified from a photo; positions still unmeasured
+
+On 2026-10-18 the team supplied a phone photo of the real printed map with its markers
+(`perception/tests/fixtures/real_board_photo_2026-10-18_portrait_1400.jpg`). Running the
+perception detector on it verified the first four rows below; the rest are estimates
+from that single perspective photo and still need a ruler.
 
 | Item | Value in `perception/board_registration.json` | Verified on the physical board? | Source |
 |---|---|---|---|
-| Dictionary | `DICT_4X4_100` | **No** | Legacy `backend/calibration/board.py` in `aditi-labs/floodshift-` |
-| Marker IDs | 10 (top-left), 11 (top-right), 12 (bottom-right), 13 (bottom-left) | **No** | Same legacy file; the spec calls these "tentative" |
-| Marker centres (UV) | (0.04, 0.04), (0.96, 0.04), (0.96, 0.96), (0.04, 0.96) | **No** | Same legacy file |
-| Marker edge length | `null` (not measured) | **No** | Nobody has measured it; centres-only mode is in use until set |
-| Marker printed rotation | 0 deg for all | **No** | Assumption; `--calibrate` key `O` solves it |
-| Board size | 420 x 420 mm, UV origin top-left | Provisional | `scenarios/nepal_rasuwa_hot_v1/data/scenario.json` (`dimensions_provisional: true`) |
-| Reprojection error | not measured | – | – |
+| Dictionary | 4X4 family; `DICT_4X4_50` configured (all 4X4 dictionaries decode these IDs) | **Yes** | Photo 2026-10-18, detector scan over every OpenCV dictionary |
+| Marker IDs | 10, 11, 12, 13 | **Yes** | Photo; ID 12 decodes only with the padded-frame retry because the paper edge touched the image border |
+| Corner layout (upright map) | TL = 10, TR = 11, **BR = 13, BL = 12** | **Yes** | Photo. The legacy audit assumed BR = 12, BL = 13: the real board has them swapped |
+| Printed rotation | 0 deg for all four in the upright frame | **Yes** | Photo: all four patterns share one rotation, equal to the map text's rotation |
+| Upright frame | map labels readable, river enters from the top; u right, v down, origin paper top-left | **Yes** (orientation) | Photo rotated 90 deg CCW; river/confluence shape matches the scenario's board-UV data orientation |
+| Marker centres (UV) | (0.065, 0.067), (0.944, 0.067), (0.944, 0.918), (0.065, 0.918) | **No, photo estimate** | Rectified photo; the bottom inset is least certain (paper edge cut off in the photo) |
+| Marker edge length | `null`; estimate 0.132 x paper height (~60 mm if the paper is 453 mm tall) | **No** | Rectified photo; set it after measuring to enable corner-based registration |
+| Board (paper) size | 594 x 453 mm **assumed** (aspect 0.763 measured, absolute size not) | **No** | The print is landscape; A-series width assumed only to give mm gates a scale |
+| Reprojection error | not measured live | – | – |
 
-No repository (old or new) contains a camera frame of the real board with its markers. The
-only real-hardware image is a photo of the yellow bridge piece on a plain background
-(`perception/tests/fixtures/README.md`). Until the table below is filled from a live
-measurement, the service runs but prints `registration NOT VERIFIED ON BOARD` in its
-status and the operator status line.
+**Cross-lane flag (shared integration / Sky):** the physical print is landscape (height about
+0.76 of width) while `scenarios/nepal_rasuwa_hot_v1/data/scenario.json` describes a 420 x 420
+square board frame, and the print's visible extent differs from the square export (the main
+river leaves the print at the right edge, not the bottom-right corner). Perception reports
+UV in the **print** frame defined above. The transform print-UV -> world `board_uv` / geo is
+owned by the shared lane and is **not** the identity; it should come from the Mapbox print
+bounds, not from stretching the square frame onto the paper.
+
+Until the measured table below is filled from a live `--calibrate`, the service prints
+`registration NOT VERIFIED ON BOARD` in its status and the operator status line.
 
 ## How to measure (15 minutes, at the venue, projector off then on)
 
@@ -30,9 +42,11 @@ status and the operator status line.
    .venv/bin/python -m perception.service --list-cameras
    ```
    DroidCam with no virtual-camera driver: use `--source http://<phone-ip>:4747/video`.
-2. Measure with a ruler, in millimetres from the board's top-left corner, the centre of each
-   printed marker, and the edge length of the black marker square. Convert to UV by dividing
-   by 420 (or the measured board size).
+2. Hold the map upright (labels readable, river entering from the top). Measure with a ruler,
+   in millimetres: the paper width and height, the centre of each black marker square from
+   the paper's top-left corner, and the edge length of the black square. Convert centres to
+   UV by dividing x by the paper width and y by the paper height. Keep all four markers at
+   least a marker's width away from the camera frame edge.
 3. Run the calibrate flow with the measured values. Example with made-up placeholders that
    **must be replaced by your ruler readings**:
    ```

@@ -95,7 +95,8 @@ latency in `docs/BOARD_REGISTRATION.md` / the team's test-evidence document.
 
 ## Hardware evidence still required (spec "Dev 1 done when")
 
-- [ ] Real board registration measured and written (`docs/BOARD_REGISTRATION.md` table)
+- [x] Marker dictionary, IDs 10-13, corner layout and rotation verified from the 2026-10-18 board photo
+- [ ] Real board registration measured with a ruler and written by `--calibrate` (`docs/BOARD_REGISTRATION.md` table)
 - [ ] Place / invalid-retry / move / remove demonstrated on the physical board, recorded
 - [ ] Partial marker occlusion by hand and by piece, recorded, no UV jump
 - [ ] Projector on: no extra candidates from overlays; `G` structure gate evaluated
