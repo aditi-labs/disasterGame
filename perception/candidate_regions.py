@@ -165,9 +165,12 @@ class CandidateDetector:
         # Gain-matched intensity change.  The gain comes from the *median* brightness ratio so
         # a bright piece covering a few percent of the board cannot drag the gain down and
         # hide itself (a mean-based gain does exactly that on a pale print).
-        valid_idx = valid > 0
+        # Subsampled (every 8th row/col): the median of ~15k pixels equals the median of ~1M for
+        # this purpose and costs a fraction of a millisecond instead of tens of milliseconds.
+        sub = (slice(None, None, 8), slice(None, None, 8))
+        valid_idx = valid[sub] > 0
         if valid_idx.any():
-            ratio_all = ref.gray[valid_idx].astype(np.float32) / np.maximum(gray[valid_idx].astype(np.float32), 1.0)
+            ratio_all = ref.gray[sub][valid_idx].astype(np.float32) / np.maximum(gray[sub][valid_idx].astype(np.float32), 1.0)
             gain = float(np.clip(np.median(ratio_all), cfg.gain_clip[0], cfg.gain_clip[1]))
         else:
             gain = 1.0

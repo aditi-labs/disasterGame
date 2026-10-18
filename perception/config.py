@@ -41,7 +41,7 @@ class CameraConfig:
 @dataclass
 class BoardConfig:
     registration_path: str = str(DEFAULT_REGISTRATION_PATH)
-    warp_px_per_mm: float = 2.0       # top-down board canvas resolution
+    warp_px_per_mm: float = 1.5       # top-down board canvas resolution (2.0 gave identical events at 2x the cost)
     min_markers: int = 2              # with corner points; centres-only mode needs 4 (3 = affine)
     max_reprojection_rms_uv: float = 0.008   # ~3.4 mm on a 420 mm board; above = degraded
     registration_grace_ms: int = 4000        # keep the last good homography this long

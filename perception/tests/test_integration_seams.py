@@ -262,5 +262,5 @@ def test_adaptive_cadence_backs_off_when_the_loop_is_slow(tmp_path):
 def test_fast_preset_sets_the_weak_laptop_knobs():
     from perception.service import build_parser, config_from_args
     cfg = config_from_args(build_parser().parse_args(["--fast"]))
-    assert cfg.board.warp_px_per_mm == 1.5 and cfg.board.redetect_every_n_frames == 2
+    assert cfg.board.warp_px_per_mm == 1.0 and cfg.board.redetect_every_n_frames == 2
     assert cfg.service.show_warp is False and cfg.service.roi_max_px == 256

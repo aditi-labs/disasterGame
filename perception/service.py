@@ -1004,7 +1004,7 @@ def config_from_args(args: argparse.Namespace) -> PerceptionConfig:
     if args.control_host:
         cfg.service.control_host = args.control_host
     if args.fast:
-        cfg.board.warp_px_per_mm = 1.5
+        cfg.board.warp_px_per_mm = 1.0
         cfg.board.redetect_every_n_frames = 2
         cfg.service.show_warp = False
         cfg.service.record_every_n_frames = 10

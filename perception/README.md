@@ -142,7 +142,7 @@ status, sink counters, processing time, warnings.
 - **Timing telemetry.** Status carries `timing` with p50/p95 per stage (aruco, warp,
   candidates, tracker, classify, total) and the port reports classifier latency p50/p95.
   Tune from these numbers on a `--record` replay, not from feel.
-- **`--fast` preset** for weak laptops: 1.5 px/mm warp, ArUco every 2 frames, warp window off,
+- **`--fast` preset** for weak laptops: 1.0 px/mm warp (default is 1.5), ArUco every 2 frames, warp window off,
   sparse recording, 256 px ROIs.
 
 ## Tuning
